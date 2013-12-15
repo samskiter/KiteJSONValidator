@@ -10,4 +10,9 @@
 
 @implementation KiteJSONValidator
 
+-(BOOL)validateJSON:(NSDictionary*)json withSchema:(NSDictionary*)schema
+{
+    return FALSE;
+}
+
 @end
