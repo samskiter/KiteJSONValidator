@@ -10,8 +10,6 @@
 
 @implementation KiteJSONValidator
 
-
-
 -(BOOL)validateJSONUnknown:(NSObject*)object withSchemaDict:(NSDictionary*)schema
 {
     if (![self checkSchemaRef:schema]) {
@@ -41,6 +39,11 @@
 }
 
 -(BOOL)validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
+{
+    
+}
+
+-(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
 {
     //may be better to pull out the keys from the schema in order (so that additional properties comes after properties and patternProperties - these can be used to add schema for child properties etc). then in additionalProperties, check keys of the collections of child property schema for gaps. the whole properties part could be considered equivalent to "get the schema for each child, if there isnt a schema for each child then fail". do properties, then pattern properties, then additional properties, then check.
     //Could remove alot of checks for invalid schema by first checking the schema against the core schema. have a public entry point to check the schema, then dont check again. optimize for repeated references perhaps (a 'checked schema' array?)
