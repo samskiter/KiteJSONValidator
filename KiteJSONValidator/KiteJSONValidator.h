@@ -18,6 +18,6 @@
  @param schema The draft4 JSON schema to validate against
  @return Whether the json is validated.
  */
--(BOOL)validateJSON:(NSDictionary*)json withSchema:(NSDictionary*)schema;
+-(BOOL)validateJSONDict:(NSDictionary*)json withSchemaDict:(NSDictionary*)schema;
 
 @end

@@ -7,14 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		67AA71381886E504000D2246 /* fstab.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = 67AA71371886E504000D2246 /* fstab.schema.json */; };
+		67AA713A1886E53B000D2246 /* fstab-sample in Resources */ = {isa = PBXBuildFile; fileRef = 67AA71391886E53B000D2246 /* fstab-sample */; };
+		67AA713C1886E555000D2246 /* entry-schema-ref.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = 67AA713B1886E555000D2246 /* entry-schema-ref.schema.json */; };
 		67ACD856187B340300693C44 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67ACD855187B340300693C44 /* XCTest.framework */; };
 		67ACD858187B340300693C44 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67ACD857187B340300693C44 /* Foundation.framework */; };
 		67ACD85A187B340300693C44 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67ACD859187B340300693C44 /* UIKit.framework */; };
 		67ACD860187B340300693C44 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 67ACD85E187B340300693C44 /* InfoPlist.strings */; };
 		67ACD862187B340300693C44 /* Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = 67ACD861187B340300693C44 /* Tests.m */; };
+		67ACD86C187B343D00693C44 /* KiteJSONValidator.h in Resources */ = {isa = PBXBuildFile; fileRef = 67ACD867187B343D00693C44 /* KiteJSONValidator.h */; };
+		67ACD86D187B343D00693C44 /* KiteJSONValidator.m in Resources */ = {isa = PBXBuildFile; fileRef = 67ACD868187B343D00693C44 /* KiteJSONValidator.m */; };
+		67ACD86E187B343D00693C44 /* schema in Resources */ = {isa = PBXBuildFile; fileRef = 67ACD869187B343D00693C44 /* schema */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		67AA71371886E504000D2246 /* fstab.schema.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = fstab.schema.json; sourceTree = "<group>"; };
+		67AA71391886E53B000D2246 /* fstab-sample */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "fstab-sample"; sourceTree = "<group>"; };
+		67AA713B1886E555000D2246 /* entry-schema-ref.schema.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "entry-schema-ref.schema.json"; sourceTree = "<group>"; };
 		67ACD852187B340300693C44 /* Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		67ACD855187B340300693C44 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 		67ACD857187B340300693C44 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -23,6 +32,9 @@
 		67ACD85F187B340300693C44 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		67ACD861187B340300693C44 /* Tests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Tests.m; sourceTree = "<group>"; };
 		67ACD863187B340300693C44 /* Tests-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Tests-Prefix.pch"; sourceTree = "<group>"; };
+		67ACD867187B343D00693C44 /* KiteJSONValidator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KiteJSONValidator.h; sourceTree = "<group>"; };
+		67ACD868187B343D00693C44 /* KiteJSONValidator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KiteJSONValidator.m; sourceTree = "<group>"; };
+		67ACD869187B343D00693C44 /* schema */ = {isa = PBXFileReference; lastKnownFileType = text; path = schema; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,9 +51,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		67AA71361886E4D7000D2246 /* fstab */ = {
+			isa = PBXGroup;
+			children = (
+				67AA71371886E504000D2246 /* fstab.schema.json */,
+				67AA713B1886E555000D2246 /* entry-schema-ref.schema.json */,
+				67AA71391886E53B000D2246 /* fstab-sample */,
+			);
+			name = fstab;
+			sourceTree = "<group>";
+		};
 		67ACD847187B33D500693C44 = {
 			isa = PBXGroup;
 			children = (
+				67ACD86B187B343D00693C44 /* KiteJSONValidator */,
 				67ACD85B187B340300693C44 /* Tests */,
 				67ACD854187B340300693C44 /* Frameworks */,
 				67ACD853187B340300693C44 /* Products */,
@@ -70,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				67ACD861187B340300693C44 /* Tests.m */,
+				67AA71361886E4D7000D2246 /* fstab */,
 				67ACD85C187B340300693C44 /* Supporting Files */,
 			);
 			path = Tests;
@@ -83,6 +107,25 @@
 				67ACD863187B340300693C44 /* Tests-Prefix.pch */,
 			);
 			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		67ACD86A187B343D00693C44 /* ReferenceSchemae */ = {
+			isa = PBXGroup;
+			children = (
+				67ACD869187B343D00693C44 /* schema */,
+			);
+			path = ReferenceSchemae;
+			sourceTree = "<group>";
+		};
+		67ACD86B187B343D00693C44 /* KiteJSONValidator */ = {
+			isa = PBXGroup;
+			children = (
+				67ACD867187B343D00693C44 /* KiteJSONValidator.h */,
+				67ACD868187B343D00693C44 /* KiteJSONValidator.m */,
+				67ACD86A187B343D00693C44 /* ReferenceSchemae */,
+			);
+			name = KiteJSONValidator;
+			path = ../../KiteJSONValidator;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -135,7 +178,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				67ACD86D187B343D00693C44 /* KiteJSONValidator.m in Resources */,
+				67AA71381886E504000D2246 /* fstab.schema.json in Resources */,
+				67ACD86C187B343D00693C44 /* KiteJSONValidator.h in Resources */,
+				67AA713C1886E555000D2246 /* entry-schema-ref.schema.json in Resources */,
+				67AA713A1886E53B000D2246 /* fstab-sample in Resources */,
 				67ACD860187B340300693C44 /* InfoPlist.strings in Resources */,
+				67ACD86E187B343D00693C44 /* schema in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,6 +334,7 @@
 				67ACD866187B340300693C44 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

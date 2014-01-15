@@ -38,9 +38,29 @@
            [property longLongValue] >= 0;
 }
 
--(BOOL)validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
+-(BOOL)validateJSONDict:(NSDictionary*)json withSchemaDict:(NSDictionary*)schema
 {
-    
+    //first validate the schema against the root schema then validate against the original
+    NSString *rootSchemaPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"schema"
+                                                                                ofType:@""];
+    NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
+    NSError *error = nil;
+    NSDictionary * rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
+                                                    options:kNilOptions
+                                                      error:&error];
+    NSLog(@"Root Schema: %@", rootSchema);
+    if (![self _validateJSONObject:schema withSchemaDict:rootSchema])
+    {
+        return FALSE; //error: invalid schema
+    }
+    else if (![self _validateJSONObject:json withSchemaDict:schema])
+    {
+        return FALSE;
+    }
+    else
+    {
+        return TRUE;
+    }
 }
 
 -(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
@@ -98,7 +118,7 @@
                     //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
                     p = [NSArray new];
                 }
-                for (NSString * )
+//                for (NSString * )
             } else if ([keyword isEqualToString:@"patternProperties"]) {
             } else if ([keyword isEqualToString:@"additionalProperties"]) {
                 if (JSONDict[keyword] != FALSE) {
