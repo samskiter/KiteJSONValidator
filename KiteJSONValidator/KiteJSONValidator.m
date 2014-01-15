@@ -10,21 +10,21 @@
 
 @implementation KiteJSONValidator
 
--(BOOL)validateJSONUnknown:(NSObject*)object withSchemaDict:(NSDictionary*)schema
-{
-    if (![self checkSchemaRef:schema]) {
-        return FALSE;
-    }
-    if (schema[@"required"]) {
-        if (![self checkRequired:schema forJSON:object]) {
-            return FALSE;
-        }
-    }
-    if (schema[@"type"]) {
-        
-    }
-    return TRUE;
-}
+//-(BOOL)validateJSONUnknown:(NSObject*)object withSchemaDict:(NSDictionary*)schema
+//{
+//    if (![self checkSchemaRef:schema]) {
+//        return FALSE;
+//    }
+//    if (schema[@"required"]) {
+//        if (![self checkRequired:schema forJSON:object]) {
+//            return FALSE;
+//        }
+//    }
+//    if (schema[@"type"]) {
+//        
+//    }
+//    return TRUE;
+//}
 
 +(BOOL)propertyIsInteger:(id)property
 {
@@ -43,17 +43,18 @@
     //first validate the schema against the root schema then validate against the original
     NSString *rootSchemaPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"schema"
                                                                                 ofType:@""];
+    //TODO: error out if the path is nil
     NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
     NSError *error = nil;
     NSDictionary * rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
                                                     options:kNilOptions
                                                       error:&error];
     NSLog(@"Root Schema: %@", rootSchema);
-    if (![self _validateJSONObject:schema withSchemaDict:rootSchema])
+    if (![self _validateJSONObject:schema withSchemaDict:[rootSchema mutableCopy]])
     {
         return FALSE; //error: invalid schema
     }
-    else if (![self _validateJSONObject:json withSchemaDict:schema])
+    else if (![self _validateJSONObject:json withSchemaDict:[schema mutableCopy]])
     {
         return FALSE;
     }
@@ -63,14 +64,14 @@
     }
 }
 
--(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
+-(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSMutableDictionary*)schema
 {
     //may be better to pull out the keys from the schema in order (so that additional properties comes after properties and patternProperties - these can be used to add schema for child properties etc). then in additionalProperties, check keys of the collections of child property schema for gaps. the whole properties part could be considered equivalent to "get the schema for each child, if there isnt a schema for each child then fail". do properties, then pattern properties, then additional properties, then check.
     //Could remove alot of checks for invalid schema by first checking the schema against the core schema. have a public entry point to check the schema, then dont check again. optimize for repeated references perhaps (a 'checked schema' array?)
     static NSArray * dictionaryKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties", @"patternProperties", @"additionalProperties", @"dependencies"];
+        dictionaryKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties",/* @"patternProperties", @"additionalProperties",*/ @"dependencies"];
     });
     
     NSMutableDictionary * propertySchema = [NSMutableDictionary dictionaryWithSharedKeySet:[NSDictionary sharedKeySetForKeys:[JSONDict allKeys]]];
@@ -101,24 +102,52 @@
                     return FALSE;
                 }
             } else if ([keyword isEqualToString:@"properties"]) {
-                NSMutableArray * s = [[JSONDict allKeys] mutableCopy];
-                if ([s count] == 0) {
-                    continue; //nothing to test
+                //If "additionalProperties" is absent, it may be considered present with an empty schema as a value.
+                if (schema[@"additionalProperties"] == nil) {
+                    schema[@"additionalProperties"] = [NSDictionary new]; //TODO: the 'defaults' in the root schema should actually fix this for us
                 }
-                NSArray * p;
-                if (schema[@"properties"])
-                {
-                    if ([schema[@"properties"] isKindOfClass:[NSDictionary class]]) {
-                        p = [schema[@"properties"] allKeys];
-                        //TODO: Each value of this object MUST be an object, and each object MUST be a valid JSON Schema.
-                    } else {
-                        return FALSE; //invalid schema - this won't be reached if s has length 0. this will be removed after initial schema check though
+                //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
+                if (schema[@"properties"] == nil) {
+                    schema[@"properties"] = [NSDictionary new];
+                }
+                if (schema[@"patternProperties"] == nil) {
+                    schema[@"patternProperties"] = [NSDictionary new];
+                }
+
+                //Successful validation of an object instance against these three keywords depends on the value of "additionalProperties":
+                //    if its value is boolean true or a schema, validation succeeds;
+                //    if its value is boolean false, the algorithm to determine validation success is described below.
+                if (!schema[@"additionalProperties"]) { //value must be boolean false
+                    
+                    NSSet * p = [NSSet setWithArray:[schema[@"properties"] allKeys]];
+                    NSArray * pp = [schema[@"patternProperties"] allKeys];
+                    NSMutableSet * s = [NSMutableSet setWithArray:[JSONDict allKeys]];
+                    //remove from "s" all elements of "p", if any;
+                    [s minusSet:p];
+                    //we loop the regexes so each is only created once
+                    [pp enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+                        NSString * regexString = obj;
+                        //Each property name of this object SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
+                        //NOTE: this regex uses ICU which has some differences to ECMA-262 (such as look-behind)
+                        NSError * error;
+                        //potentially inefficient as the regex object is recreated numerous times
+                        NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:regexString options:0 error:&error];
+                        if (error) {
+                           return;
+                        }
+                        [s minusSet:[s objectsPassingTest:^BOOL(id obj, BOOL *stop) {
+                           NSString * keyString = obj;
+                           return [regex firstMatchInString:keyString options:0 range:NSMakeRange(0, keyString.length)];
+                        }]];
+                        if ([s count] == 0) {
+                           *stop = YES;
+                        }
+                    }];
+                    //Validation of the instance succeeds if, after these two steps, set "s" is empty.
+                    if ([s count] > 0) {
+                        return FALSE;
                     }
-                } else {
-                    //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                    p = [NSArray new];
                 }
-//                for (NSString * )
             } else if ([keyword isEqualToString:@"patternProperties"]) {
             } else if ([keyword isEqualToString:@"additionalProperties"]) {
                 if (JSONDict[keyword] != FALSE) {
