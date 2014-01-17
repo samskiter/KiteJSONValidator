@@ -78,10 +78,6 @@
     for (NSString * keyword in dictionaryKeywords) {
         if (schema[keyword]) {
             if ([keyword isEqualToString:@"maxProperties"]) {
-                if (![KiteJSONValidator propertyIsPositiveInteger:JSONDict[keyword]]) {
-                    //The value of this keyword MUST be an integer. This integer MUST be greater than, or equal to, 0.
-                    return FALSE; //invalid schema
-                }
                 NSInteger maxProperties = [JSONDict[keyword] integerValue];
                 if ([[JSONDict allKeys] count] > maxProperties) {
                     //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
@@ -113,40 +109,54 @@
                 if (schema[@"patternProperties"] == nil) {
                     schema[@"patternProperties"] = [NSDictionary new];
                 }
-
+                
+                /** calculating children schemas **/
+                //The calculation of the children schemas is combined with the checking of present keys
+                NSSet * p = [NSSet setWithArray:[schema[@"properties"] allKeys]];
+                NSArray * pp = [schema[@"patternProperties"] allKeys];
+                NSSet * allKeys = [NSSet setWithArray:[JSONDict allKeys]];
+                NSMutableDictionary * testSchemas = [NSMutableDictionary dictionaryWithCapacity:allKeys.count];
+                
+                NSMutableSet * ps = [NSMutableSet setWithSet:allKeys];
+                //If set "p" contains value "m", then the corresponding schema in "properties" is added to "s".
+                [ps intersectSet:p];
+                for (id m in ps) {
+                    testSchemas[m] = [NSMutableArray arrayWithObject:[schema[@"properties"] objectForKey:m]];
+                }
+                
+                //we loop the regexes so each is only created once
+                //For each regex in "pp", if it matches "m" successfully, the corresponding schema in "patternProperties" is added to "s".
+                for (NSString * regexString in pp) {
+                    //Each property name of this object SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
+                    //NOTE: this regex uses ICU which has some differences to ECMA-262 (such as look-behind)
+                    NSError * error;
+                    NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:regexString options:0 error:&error];
+                    if (error) {
+                        continue;
+                    }
+                    for (NSString * m in allKeys) {
+                        if ([regex firstMatchInString:m options:0 range:NSMakeRange(0, m.length)]) {
+                            if (testSchemas[m] == NULL) {
+                                testSchemas[m] = [NSMutableArray arrayWithObject:[schema[@"patternProperties"] objectForKey:regexString]];
+                            } else {
+                                [testSchemas[m] addObject:[schema[@"patternProperties"] objectForKey:regexString]];
+                            }
+                        }
+                    }
+                }
+                assert(testSchemas.count <= allKeys.count);
+                
                 //Successful validation of an object instance against these three keywords depends on the value of "additionalProperties":
                 //    if its value is boolean true or a schema, validation succeeds;
                 //    if its value is boolean false, the algorithm to determine validation success is described below.
-                if (!schema[@"additionalProperties"]) { //value must be boolean false
-                    
-                    NSSet * p = [NSSet setWithArray:[schema[@"properties"] allKeys]];
-                    NSArray * pp = [schema[@"patternProperties"] allKeys];
-                    NSMutableSet * s = [NSMutableSet setWithArray:[JSONDict allKeys]];
-                    //remove from "s" all elements of "p", if any;
-                    [s minusSet:p];
-                    //we loop the regexes so each is only created once
-                    [pp enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-                        NSString * regexString = obj;
-                        //Each property name of this object SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
-                        //NOTE: this regex uses ICU which has some differences to ECMA-262 (such as look-behind)
-                        NSError * error;
-                        //potentially inefficient as the regex object is recreated numerous times
-                        NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:regexString options:0 error:&error];
-                        if (error) {
-                           return;
-                        }
-                        [s minusSet:[s objectsPassingTest:^BOOL(id obj, BOOL *stop) {
-                           NSString * keyString = obj;
-                           return [regex firstMatchInString:keyString options:0 range:NSMakeRange(0, keyString.length)];
-                        }]];
-                        if ([s count] == 0) {
-                           *stop = YES;
-                        }
-                    }];
+                if (!schema[@"additionalProperties"]) { //value must therefore be boolean false
+                    //Because we have build a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
                     //Validation of the instance succeeds if, after these two steps, set "s" is empty.
-                    if ([s count] > 0) {
+                    if (testSchemas.count < allKeys.count) {
                         return FALSE;
                     }
+                } else {
+                    //find keys from allkeys that are not in testSchemas and add additionalProperties
                 }
             } else if ([keyword isEqualToString:@"patternProperties"]) {
             } else if ([keyword isEqualToString:@"additionalProperties"]) {
@@ -319,10 +329,6 @@
 
 -(BOOL)checkRequired:(NSDictionary*)schema forJSON:(NSDictionary*)json
 {
-    if (![schema[@"required"] isKindOfClass:[NSArray class]]) {
-        //The value of this keyword MUST be an array.
-        return FALSE; //invalid schema
-    }
     NSArray * requiredArray = schema[@"required"];
     if (![requiredArray count] > 0) {
         //This array MUST have at least one element.
