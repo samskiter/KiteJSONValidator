@@ -10,21 +10,16 @@
 
 @implementation KiteJSONValidator
 
-//-(BOOL)validateJSONUnknown:(NSObject*)object withSchemaDict:(NSDictionary*)schema
-//{
-//    if (![self checkSchemaRef:schema]) {
-//        return FALSE;
-//    }
-//    if (schema[@"required"]) {
-//        if (![self checkRequired:schema forJSON:object]) {
-//            return FALSE;
-//        }
-//    }
-//    if (schema[@"type"]) {
-//        
-//    }
-//    return TRUE;
-//}
+-(BOOL)validateJSONUnknown:(NSObject*)object withSchemaDict:(NSDictionary*)schema
+{
+    if (![self checkSchemaRef:schema]) {
+        return FALSE;
+    }
+    if (schema[@"type"]) {
+        
+    }
+    return TRUE;
+}
 
 +(BOOL)propertyIsInteger:(id)property
 {
@@ -94,8 +89,12 @@
                     return FALSE; //invalid JSON dict
                 }
             } else if ([keyword isEqualToString:@"required"]) {
-                if (![self checkRequired:schema forJSON:JSONDict]) {
-                    return FALSE;
+                NSArray * requiredArray = schema[@"required"];
+                for (NSObject * requiredProp in requiredArray) {
+                    NSString * requiredPropStr = (NSString*)requiredProp;
+                    if (![JSONDict valueForKey:requiredPropStr]) {
+                        return FALSE; //required not present. invalid JSON dict.
+                    }
                 }
             } else if ([keyword isEqualToString:@"properties"]) {
                 //If "additionalProperties" is absent, it may be considered present with an empty schema as a value.
@@ -329,25 +328,7 @@
 
 -(BOOL)checkRequired:(NSDictionary*)schema forJSON:(NSDictionary*)json
 {
-    NSArray * requiredArray = schema[@"required"];
-    if (![requiredArray count] > 0) {
-        //This array MUST have at least one element.
-        return  FALSE; //invalid schema
-    }
-    if (!([[NSSet setWithArray: requiredArray] count] == [requiredArray count])) {
-        //Elements of this array MUST be unique.
-        return FALSE; // invalid schema
-    }
-    for (NSObject * requiredProp in requiredArray) {
-        if (![requiredProp isKindOfClass:[NSString class]]) {
-            //Elements of this array MUST be strings.
-            return FALSE; // invalid schema
-        }
-        NSString * requiredPropStr = (NSString*)requiredProp;
-        if (![json valueForKey:requiredPropStr]) {
-            return FALSE; //required not present. invalid JSON dict.
-        }
-    }
+    
     return TRUE;
 }
 
