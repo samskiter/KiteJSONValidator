@@ -132,7 +132,13 @@
                     }
                 } else {
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
-                    //if boolean true assumed to be an empty schema
+                    NSDictionary * additionalPropsSchema;
+                    //In addition, boolean value true for "additionalItems" is considered equivalent to an empty schema.
+                    if ([schema[@"additionalProperties"] isKindOfClass:[NSNumber class]]) { //TODO: better check for bool?
+                        additionalPropsSchema = [NSDictionary new];
+                    } else {
+                        additionalPropsSchema = schema[@"additionalProperties"];
+                    }
                 }
                 
                 //TODO: run the tests on the testSchemas
