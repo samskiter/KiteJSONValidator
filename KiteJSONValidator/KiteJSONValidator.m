@@ -157,170 +157,31 @@
                 } else {
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
                 }
-            } else if ([keyword isEqualToString:@"patternProperties"]) {
-            } else if ([keyword isEqualToString:@"additionalProperties"]) {
-                if (JSONDict[keyword] != FALSE) {
-                    //if its value is boolean true or a schema, validation succeeds;
-                    continue;
-                }
-                //TODO: the properties validation needs to be mixed with schema selection for child validation. NOTE: "object member values may have to validate against more than one schema." - i.e. there may be multiple children schema to validate against (from properties and pattern properties)
-                NSMutableArray * s = [[JSONDict allKeys] mutableCopy];
-                if ([s count] == 0) {
-                    continue; //nothing to test
-                }
-                NSArray * p;
-                if (schema[@"properties"])
-                {
-                    if ([schema[@"properties"] isKindOfClass:[NSDictionary class]]) {
-                        p = [schema[@"properties"] allKeys];
-                        //TODO: Each value of this object MUST be an object, and each object MUST be a valid JSON Schema.
-                    } else {
-                        return FALSE; //invalid schema
-                    }
-                } else {
-                    //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                    p = [NSArray new];
-                }
-                NSArray * pp;
-                if (schema[@"patternProperties"]) {
-                    if ([schema[@"patternProperties"] isKindOfClass:[NSDictionary class]]) {
-                        pp = [schema[@"patternProperties"] allKeys];
-                        //TODO: Each property name of this object SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect. Each property value of this object MUST be an object, and each object MUST be a valid JSON Schema.
-                    } else {
-                        return FALSE; //invalid schema
-                    }
-                } else {
-                    //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                    pp = [NSArray new];
-                }
-                
-                //Step 1. remove from "s" all elements of "p", if any;
-                [s removeObjectsInArray:p];
-                if ([s count] == 0) {
-                    continue; //nothing left to test
-                }
-                
-                //Step 2. for each regex in "pp", remove all elements of "s" which this regex matches.
-                for (NSString * regexString in pp) {
-                    NSError * regexError;
-                    NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:regexString options:0 error:&regexError];
-                    if (regexError) {
-                        //Each property name of this object SHOULD be a valid regular expression
-                        //This one is not, so we just continue and ignore it.
-                        continue;
-                    }
-                    for (NSString * propertyString in s) {
-                        if ([regex numberOfMatchesInString:propertyString options:0 range:NSMakeRange(0, propertyString.length)] > 0) {
-                            [s removeObject:propertyString]; //slightly worrisome changing the array while looping it....
+            } else if ([keyword isEqualToString:@"dependencies"]) {
+                NSSet * properties = [JSONDict keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }];
+                NSDictionary * dependencies = schema[keyword];
+                for (NSString * name in [dependencies allKeys]) {
+                    if ([properties containsObject:name]) {
+                        id dependency = dependencies[name];
+                        if ([dependency isKindOfClass:[NSDictionary class]]) {
+                            NSDictionary * schemaDependency = dependency;
+                            //For all (name, schema) pair of schema dependencies, if the instance has a property by this name, then it must also validate successfully against the schema.
+                            //Note that this is the instance itself which must validate successfully, not the value associated with the property name.
+                            //(we already know JSONDict is a dictionary)
+                            if (![self validateJSONDict:JSONDict withSchemaDict:schemaDependency[name]]) {
+                                return FALSE;
+                            }
+                        } else if ([dependency isKindOfClass:[NSArray class]]) {
+                            NSArray * propertyDependency = dependency;
+                            //For each (name, propertyset) pair of property dependencies, if the instance has a property by this name, then it must also have properties with the same names as propertyset.
+                            NSSet * propertySet = [NSSet setWithArray:propertyDependency];
+                            if (![propertySet isSubsetOfSet:propertySet]) {
+                                return FALSE;
+                            }
                         }
                     }
-                    if ([s count] == 0 ) {
-                        break;
-                    }
-                }
-                
-                //Validation of the instance succeeds if, after these two steps, set "s" is empty.
-                if ([s count] > 0 ) {
-                    return FALSE; //invalid JSON dict
-                }
-            } else if ([keyword isEqualToString:@"dependencies"]) {
-                
-            }
-        }
-    }
-    
-    for (NSString * propertyKey in [schema keyEnumerator]) {
-        if ([propertyKey isEqualToString:@"maxProperties"]) {
-            if (![KiteJSONValidator propertyIsPositiveInteger:JSONDict[propertyKey]]) {
-                //The value of this keyword MUST be an integer. This integer MUST be greater than, or equal to, 0.
-                return FALSE; //invalid schema
-            }
-            NSInteger maxProperties = [JSONDict[propertyKey] integerValue];
-            if ([[JSONDict allKeys] count] > maxProperties) {
-                //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
-                return FALSE; //invalid JSON dict
-            }
-        } else if ([propertyKey isEqualToString:@"minProperties"]) {
-            if (![KiteJSONValidator propertyIsPositiveInteger:JSONDict[propertyKey]]) {
-                //The value of this keyword MUST be an integer. This integer MUST be greater than, or equal to, 0.
-                return FALSE; //invalid schema
-            }
-            NSInteger minProperties = [JSONDict[propertyKey] integerValue];
-            if ([[JSONDict allKeys] count] < minProperties) {
-                //An object instance is valid against "minProperties" if its number of properties is greater than, or equal to, the value of this keyword.
-                return FALSE; //invalid JSON dict
-            }
-        } else if ([propertyKey isEqualToString:@"required"]) {
-            if (![self checkRequired:schema forJSON:JSONDict]) {
-                return FALSE;
-            }
-        } else if ([propertyKey isEqualToString:@"additionalProperties"]) {
-            if (JSONDict[propertyKey] != FALSE) {
-                //if its value is boolean true or a schema, validation succeeds;
-                continue;
-            }
-            //TODO: the properties validation needs to be mixed with schema selection for child validation. NOTE: "object member values may have to validate against more than one schema." - i.e. there may be multiple children schema to validate against (from properties and pattern properties)
-            NSMutableArray * s = [[JSONDict allKeys] mutableCopy];
-            if ([s count] == 0) {
-                continue; //nothing to test
-            }
-            NSArray * p;
-            if (schema[@"properties"])
-            {
-                if ([schema[@"properties"] isKindOfClass:[NSDictionary class]]) {
-                    p = [schema[@"properties"] allKeys];
-                    //TODO: Each value of this object MUST be an object, and each object MUST be a valid JSON Schema.
-                } else {
-                    return FALSE; //invalid schema
-                }
-            } else {
-                //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                p = [NSArray new];
-            }
-            NSArray * pp;
-            if (schema[@"patternProperties"]) {
-                if ([schema[@"patternProperties"] isKindOfClass:[NSDictionary class]]) {
-                    pp = [schema[@"patternProperties"] allKeys];
-                    //TODO: Each property name of this object SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect. Each property value of this object MUST be an object, and each object MUST be a valid JSON Schema.
-                } else {
-                    return FALSE; //invalid schema
-                }
-            } else {
-                //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                pp = [NSArray new];
-            }
-            
-            //Step 1. remove from "s" all elements of "p", if any;
-            [s removeObjectsInArray:p];
-            if ([s count] == 0) {
-                continue; //nothing left to test
-            }
-            
-            //Step 2. for each regex in "pp", remove all elements of "s" which this regex matches.
-            for (NSString * regexString in pp) {
-                NSError * regexError;
-                NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:regexString options:0 error:&regexError];
-                if (regexError) {
-                    //Each property name of this object SHOULD be a valid regular expression
-                    //This one is not, so we just continue and ignore it.
-                    continue;
-                }
-                for (NSString * propertyString in s) {
-                    if ([regex numberOfMatchesInString:propertyString options:0 range:NSMakeRange(0, propertyString.length)] > 0) {
-                        [s removeObject:propertyString]; //slightly worrisome changing the array while looping it....
-                    }
-                }
-                if ([s count] == 0 ) {
-                    break;
                 }
             }
-            
-            //Validation of the instance succeeds if, after these two steps, set "s" is empty.
-            if ([s count] > 0 ) {
-                return FALSE; //invalid JSON dict
-            }
-        } else if ([propertyKey isEqualToString:@"dependencies"]) {
-            
         }
     }
     return TRUE;
