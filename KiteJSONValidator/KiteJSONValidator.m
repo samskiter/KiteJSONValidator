@@ -139,9 +139,23 @@
                     } else {
                         additionalPropsSchema = schema[@"additionalProperties"];
                     }
+                    NSMutableSet * additionalKeys = [allKeys mutableCopy];
+                    [additionalKeys minusSet:[testSchemas keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }]];
+                    for (NSString * key in additionalKeys) {
+                        testSchemas[key] = additionalPropsSchema;
+                    }
                 }
                 
                 //TODO: run the tests on the testSchemas
+                for (NSString * property in [testSchemas keyEnumerator]) {
+                    NSArray * subschemas = testSchemas[property];
+                    for (NSDictionary * subschema in subschemas) {
+                        //TODO: call private validator
+                        if (![self validateJSON:JSONDict[property] withSchemaDict:subschema]) {
+                            return FALSE;
+                        }
+                    }
+                }
             } else if ([keyword isEqualToString:@"dependencies"]) {
                 NSSet * properties = [JSONDict keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }];
                 NSDictionary * dependencies = schema[keyword];
@@ -152,8 +166,8 @@
                             NSDictionary * schemaDependency = dependency;
                             //For all (name, schema) pair of schema dependencies, if the instance has a property by this name, then it must also validate successfully against the schema.
                             //Note that this is the instance itself which must validate successfully, not the value associated with the property name.
-                            //(should call more generic validator, incase of defaults)
-                            if (![self validateJSONDict:JSONDict withSchemaDict:schemaDependency[name]]) {
+                            //TODO:(should probably call private validator)
+                            if (![self validateJSON:JSONDict withSchemaDict:schemaDependency[name]]) {
                                 return FALSE;
                             }
                         } else if ([dependency isKindOfClass:[NSArray class]]) {
@@ -183,7 +197,35 @@
     for (NSString * keyword in dictionaryKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"additionalItems@"]) {
-                
+                id additionalItems = schema[keyword];
+                if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == TRUE) { //TODO: better test for boolean?
+                    additionalItems = [NSDictionary new];
+                }
+                id items = schema[@"items"];
+                for (int index = 0; index < [JSONArray count]; index++) {
+                    id child = JSONArray[index];
+                    if ([items isKindOfClass:[NSDictionary class]]) {
+                        //If items is a schema, then the child instance must be valid against this schema, regardless of its index, and regardless of the value of "additionalItems".
+                        if (![self validateJSON:JSONArray[index] withSchemaDict:items]) {
+                            return FALSE;
+                        }
+                    } else if ([items isKindOfClass:[NSArray class]]) {
+                        if (index < [items count]) {
+                            if (![self validateJSON:child withSchemaDict:items[index]]) {
+                                return FALSE;
+                            }
+                        } else {
+                            if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == FALSE) {
+                                //if the value of "additionalItems" is boolean value false and the value of "items" is an array, the instance is valid if its size is less than, or equal to, the size of "items".
+                                return FALSE;
+                            } else {
+                                if (![self validateJSON:child withSchemaDict:additionalItems]) {
+                                    return FALSE;
+                                }
+                            }
+                        }
+                    }
+                }
             } else if ([keyword isEqualToString:@"maxItems"]) {
                 //An array instance is valid against "maxItems" if its size is less than, or equal to, the value of this keyword.
                 if ([JSONArray count] > [schema[keyword] intValue]) { return FALSE; }

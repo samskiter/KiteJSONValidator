@@ -19,5 +19,6 @@
  @return Whether the json is validated.
  */
 -(BOOL)validateJSONDict:(NSDictionary*)json withSchemaDict:(NSDictionary*)schema;
+-(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary*)schema;
 
 @end
