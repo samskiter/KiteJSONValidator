@@ -61,8 +61,6 @@
 
 -(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSMutableDictionary*)schema
 {
-    //may be better to pull out the keys from the schema in order (so that additional properties comes after properties and patternProperties - these can be used to add schema for child properties etc). then in additionalProperties, check keys of the collections of child property schema for gaps. the whole properties part could be considered equivalent to "get the schema for each child, if there isnt a schema for each child then fail". do properties, then pattern properties, then additional properties, then check.
-    //Could remove alot of checks for invalid schema by first checking the schema against the core schema. have a public entry point to check the schema, then dont check again. optimize for repeated references perhaps (a 'checked schema' array?)
     static NSArray * dictionaryKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -71,25 +69,15 @@
     
     NSMutableDictionary * propertySchema = [NSMutableDictionary dictionaryWithSharedKeySet:[NSDictionary sharedKeySetForKeys:[JSONDict allKeys]]];
     for (NSString * keyword in dictionaryKeywords) {
-        if (schema[keyword]) {
+        if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"maxProperties"]) {
-                NSInteger maxProperties = [JSONDict[keyword] integerValue];
-                if ([[JSONDict allKeys] count] > maxProperties) {
-                    //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
-                    return FALSE; //invalid JSON dict
-                }
+                //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
+                if ([JSONDict count] > [schema[keyword] intValue]) { return FALSE; /*invalid JSON dict*/ }
             } else if ([keyword isEqualToString:@"minProperties"]) {
-                if (![KiteJSONValidator propertyIsPositiveInteger:JSONDict[keyword]]) {
-                    //The value of this keyword MUST be an integer. This integer MUST be greater than, or equal to, 0.
-                    return FALSE; //invalid schema
-                }
-                NSInteger minProperties = [JSONDict[keyword] integerValue];
-                if ([[JSONDict allKeys] count] < minProperties) {
-                    //An object instance is valid against "minProperties" if its number of properties is greater than, or equal to, the value of this keyword.
-                    return FALSE; //invalid JSON dict
-                }
+                //An object instance is valid against "minProperties" if its number of properties is greater than, or equal to, the value of this keyword.
+                if ([JSONDict count] < [schema[keyword] intValue]) { return FALSE; /*invalid JSON dict*/ }
             } else if ([keyword isEqualToString:@"required"]) {
-                NSArray * requiredArray = schema[@"required"];
+                NSArray * requiredArray = schema[keyword];
                 for (NSObject * requiredProp in requiredArray) {
                     NSString * requiredPropStr = (NSString*)requiredProp;
                     if (![JSONDict valueForKey:requiredPropStr]) {
@@ -97,18 +85,6 @@
                     }
                 }
             } else if ([keyword isEqualToString:@"properties"]) {
-                //If "additionalProperties" is absent, it may be considered present with an empty schema as a value.
-                if (schema[@"additionalProperties"] == nil) {
-                    schema[@"additionalProperties"] = [NSDictionary new]; //TODO: the 'defaults' in the root schema should actually fix this for us
-                }
-                //If either "properties" or "patternProperties" are absent, they can be considered present with an empty object as a value.
-                if (schema[@"properties"] == nil) {
-                    schema[@"properties"] = [NSDictionary new];
-                }
-                if (schema[@"patternProperties"] == nil) {
-                    schema[@"patternProperties"] = [NSDictionary new];
-                }
-                
                 /** calculating children schemas **/
                 //The calculation of the children schemas is combined with the checking of present keys
                 NSSet * p = [NSSet setWithArray:[schema[@"properties"] allKeys]];
@@ -149,14 +125,17 @@
                 //    if its value is boolean true or a schema, validation succeeds;
                 //    if its value is boolean false, the algorithm to determine validation success is described below.
                 if (!schema[@"additionalProperties"]) { //value must therefore be boolean false
-                    //Because we have build a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
+                    //Because we have built a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
                     //Validation of the instance succeeds if, after these two steps, set "s" is empty.
                     if (testSchemas.count < allKeys.count) {
                         return FALSE;
                     }
                 } else {
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
+                    //if boolean true assumed to be an empty schema
                 }
+                
+                //TODO: run the tests on the testSchemas
             } else if ([keyword isEqualToString:@"dependencies"]) {
                 NSSet * properties = [JSONDict keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }];
                 NSDictionary * dependencies = schema[keyword];
@@ -167,7 +146,7 @@
                             NSDictionary * schemaDependency = dependency;
                             //For all (name, schema) pair of schema dependencies, if the instance has a property by this name, then it must also validate successfully against the schema.
                             //Note that this is the instance itself which must validate successfully, not the value associated with the property name.
-                            //(we already know JSONDict is a dictionary)
+                            //(should call more generic validator, incase of defaults)
                             if (![self validateJSONDict:JSONDict withSchemaDict:schemaDependency[name]]) {
                                 return FALSE;
                             }
@@ -187,9 +166,33 @@
     return TRUE;
 }
 
--(BOOL)checkRequired:(NSDictionary*)schema forJSON:(NSDictionary*)json
+-(BOOL)_validateJSONArray:(NSArray*)JSONArray withSchemaDict:(NSDictionary*)schema
 {
+    static NSArray * dictionaryKeywords;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dictionaryKeywords = @[@"additionalItems@",/* @"items",*/ @"maxItems", @"minItems", @"uniqueItems"];
+    });
     
+    for (NSString * keyword in dictionaryKeywords) {
+        if (schema[keyword] != nil) {
+            if ([keyword isEqualToString:@"additionalItems@"]) {
+                
+            } else if ([keyword isEqualToString:@"maxItems"]) {
+                //An array instance is valid against "maxItems" if its size is less than, or equal to, the value of this keyword.
+                if ([JSONArray count] > [schema[keyword] intValue]) { return FALSE; }
+                //An array instance is valid against "minItems" if its size is greater than, or equal to, the value of this keyword.
+            } else if ([keyword isEqualToString:@"minItems"]) {
+                if ([JSONArray count] < [schema[keyword] intValue]) { return FALSE; }
+            } else if ([keyword isEqualToString:@"uniqueItems"]) {
+                if (schema[keyword]) {
+                    //If it has boolean value true, the instance validates successfully if all of its elements are unique.
+                    NSSet * items = [NSSet setWithArray:JSONArray];
+                    if ([items count] < [JSONArray count]) { return FALSE; }
+                }
+            }
+        }
+    }
     return TRUE;
 }
 
