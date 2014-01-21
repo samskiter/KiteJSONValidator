@@ -83,19 +83,56 @@
                     }
                 } else {
                     if (![JSONNumber doubleValue] <= [schema[keyword] doubleValue]) {
+                        //if "exclusiveMaximum" is not present, or has boolean value false, then the instance is valid if it is lower than, or equal to, the value of "maximum"
                         return FALSE;
                     }
                 }
             } else if ([keyword isEqualToString:@"minimum"]) {
                 if (schema[@"exclusiveMinimum"]) {
                     if (![JSONNumber doubleValue] > [schema[keyword] doubleValue]) {
-                        //if "exclusiveMaximum" has boolean value true, the instance is valid if it is strictly lower than the value of "maximum".
+                        //if "exclusiveMinimum" is present and has boolean value true, the instance is valid if it is strictly greater than the value of "minimum".
                         return FALSE;
                     }
                 } else {
                     if (![JSONNumber doubleValue] >= [schema[keyword] doubleValue]) {
+                        //if "exclusiveMinimum" is not present, or has boolean value false, then the instance is valid if it is greater than, or equal to, the value of "minimum"
                         return FALSE;
                     }
+                }
+            }
+        }
+    }
+    return TRUE;
+}
+
+-(BOOL)_validateJSONString:(NSString*)JSONString withSchemaDict:(NSDictionary*)schema
+{
+    static NSArray * dictionaryKeywords;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dictionaryKeywords = @[@"maxLength", @"minLength", @"pattern"];
+    });
+    
+    for (NSString * keyword in dictionaryKeywords) {
+        if (schema[keyword] != nil) {
+            if ([keyword isEqualToString:@"maxLength"]) {
+                //A string instance is valid against this keyword if its length is less than, or equal to, the value of this keyword.
+                if (!JSONString.length <= [schema[keyword] intValue]) { return FALSE; }
+            } else if ([keyword isEqualToString:@"minLength"]) {
+                //A string instance is valid against this keyword if its length is greater than, or equal to, the value of this keyword.
+                if (!JSONString.length >= [schema[keyword] intValue]) { return FALSE; }
+            } else if ([keyword isEqualToString:@"pattern"]) {
+                //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
+                //This string SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
+                //NOTE: this regex uses ICU which has some differences to ECMA-262 (such as look-behind)
+                NSError * error;
+                NSRegularExpression * regex = [NSRegularExpression regularExpressionWithPattern:schema[keyword] options:0 error:&error];
+                if (error) {
+                    continue;
+                }
+                if (NSEqualRanges([regex rangeOfFirstMatchInString:JSONString options:0 range:NSMakeRange(0, JSONString.length)], NSMakeRange(NSNotFound, 0))) {
+                    //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
+                    return FALSE;
                 }
             }
         }
@@ -154,7 +191,7 @@
                         continue;
                     }
                     for (NSString * m in allKeys) {
-                        if ([regex firstMatchInString:m options:0 range:NSMakeRange(0, m.length)]) {
+                        if (!NSEqualRanges([regex rangeOfFirstMatchInString:m options:0 range:NSMakeRange(0, m.length)], NSMakeRange(NSNotFound, 0))) {
                             if (testSchemas[m] == NULL) {
                                 testSchemas[m] = [NSMutableArray arrayWithObject:[schema[@"patternProperties"] objectForKey:regexString]];
                             } else {
