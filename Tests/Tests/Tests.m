@@ -49,7 +49,7 @@
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
-                BOOL result = [validator validateJSONDict:json[@"data"] withSchemaDict:test[@"schema"]];
+                BOOL result = [validator validateJSON:json[@"data"] withSchemaDict:test[@"schema"]];
                 if (result != (BOOL)json[@"valid"]) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], !result);
                 }

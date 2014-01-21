@@ -33,8 +33,10 @@
            [property longLongValue] >= 0;
 }
 
--(BOOL)validateJSONDict:(NSDictionary*)json withSchemaDict:(NSDictionary*)schema
+-(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
+    //need to make sure the validation of schema doesn't infinitely recurse (self references)
+    // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
     //first validate the schema against the root schema then validate against the original
     NSString *rootSchemaPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"schema"
                                                                                 ofType:@""];
@@ -42,14 +44,14 @@
     NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
     NSError *error = nil;
     NSDictionary * rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
-                                                    options:kNilOptions
-                                                      error:&error];
+                                                                options:kNilOptions
+                                                                  error:&error];
     NSLog(@"Root Schema: %@", rootSchema);
-    if (![self _validateJSONObject:schema withSchemaDict:[rootSchema mutableCopy]])
+    if (![self _validateJSON:schema withSchemaDict:rootSchema])
     {
         return FALSE; //error: invalid schema
     }
-    else if (![self _validateJSONObject:json withSchemaDict:[schema mutableCopy]])
+    else if (![self _validateJSON:json withSchemaDict:[schema mutableCopy]])
     {
         return FALSE;
     }
@@ -58,7 +60,71 @@
         return TRUE;
     }
 }
+-(BOOL)_validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
+{
+    //TODO: replace all top level refs
+    
+    static NSArray * dictionaryKeywords;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dictionaryKeywords = @[@"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
+    });
+    /*"title" and "description"
+     6.1.1.  Valid values
+     6.1.2.  Purpose
+     6.2.  "default"
+     format <- optional*/
+    
+    
+    //TODO: extract the types first before the check (if there is no type specified, we'll never hit the checking code
+    for (NSString * keyword in dictionaryKeywords) {
+        if (schema[keyword] != nil) {
+            if ([keyword isEqualToString:@"enum"]) {
+                if (![schema[keyword] containsObject:json]) { return FALSE; }
+            } else if ([keyword isEqualToString:@"type"]) {
+                if ([schema[keyword] isEqualToString:@"array"]) {
+                    if (![json isKindOfClass:[NSArray class]]) { return FALSE; }
+                } else if ([schema[keyword] isEqualToString:@"boolean"]) {
+                    //boolean checking is limited, but we'll ensure its an integer and it is 1 or 0;
+                    if (![json isKindOfClass:[NSNumber class]]) {
+                        return FALSE;
+                    } else {
+                        double num = [json doubleValue];
+                        if ((num - floor(num)) != 0.0 || (num != 1.0 || num != 0.0)) {
+                            return FALSE;
+                        }
+                    }
+                } else if ([schema[keyword] isEqualToString:@"integer"]) {
+                    if (![json isKindOfClass:[NSNumber class]]) {
+                        return FALSE;
+                    } else {
+                        double num = [json doubleValue];
+                        if ((num - floor(num)) != 0.0) {
+                            return FALSE;
+                        }
+                    }
+                } else if ([schema[keyword] isEqualToString:@"null"]) {
+                    if (![json isKindOfClass:[NSNull class]]) { return FALSE; }
+                } else if ([schema[keyword] isEqualToString:@"number"]) {
+                    if (![json isKindOfClass:[NSNumber class]]) { return FALSE; }
+                } else if ([schema[keyword] isEqualToString:@"object"]) {
+                    if (![json isKindOfClass:[NSDictionary class]]) { return FALSE; }
+                } else if ([schema[keyword] isEqualToString:@"string"]) {
+                    if (![json isKindOfClass:[NSString class]]) { return FALSE; }
+                }
+            } else if ([keyword isEqualToString:@"allOf"]) {
+                
+            } else if ([keyword isEqualToString:@"anyOf"]) {
+            } else if ([keyword isEqualToString:@"oneOf"]) {
+            } else if ([keyword isEqualToString:@"not"]) {
+            } else if ([keyword isEqualToString:@"definitions"]) {
+            }
+        }
+    }
+    return FALSE;
+}
 
+//for number and integer
 -(BOOL)_validateJSONNumeric:(NSNumber*)JSONNumber withSchemaDict:(NSDictionary*)schema
 {
     static NSArray * dictionaryKeywords;
@@ -140,7 +206,7 @@
     return TRUE;
 }
 
--(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSMutableDictionary*)schema
+-(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
 {
     static NSArray * dictionaryKeywords;
     static dispatch_once_t onceToken;
