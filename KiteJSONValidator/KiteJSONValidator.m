@@ -59,6 +59,50 @@
     }
 }
 
+-(BOOL)_validateJSONNumeric:(NSNumber*)JSONNumber withSchemaDict:(NSDictionary*)schema
+{
+    static NSArray * dictionaryKeywords;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dictionaryKeywords = @[@"multipleOf", @"maximum",/* @"exclusiveMaximum",*/ @"minimum",/* @"exclusiveMinimum"*/];
+    });
+    
+    for (NSString * keyword in dictionaryKeywords) {
+        if (schema[keyword] != nil) {
+            if ([keyword isEqualToString:@"multipleOf"]) {
+                //A numeric instance is valid against "multipleOf" if the result of the division of the instance by this keyword's value is an integer.
+                double divResult = [JSONNumber doubleValue] / [schema[keyword] doubleValue];
+                if ((divResult - floor(divResult)) != 0.0) {
+                    return FALSE;
+                }
+            } else if ([keyword isEqualToString:@"maximum"]) {
+                if (schema[@"exclusiveMaximum"]) {
+                    if (![JSONNumber doubleValue] < [schema[keyword] doubleValue]) {
+                        //if "exclusiveMaximum" has boolean value true, the instance is valid if it is strictly lower than the value of "maximum".
+                        return FALSE;
+                    }
+                } else {
+                    if (![JSONNumber doubleValue] <= [schema[keyword] doubleValue]) {
+                        return FALSE;
+                    }
+                }
+            } else if ([keyword isEqualToString:@"minimum"]) {
+                if (schema[@"exclusiveMinimum"]) {
+                    if (![JSONNumber doubleValue] > [schema[keyword] doubleValue]) {
+                        //if "exclusiveMaximum" has boolean value true, the instance is valid if it is strictly lower than the value of "maximum".
+                        return FALSE;
+                    }
+                } else {
+                    if (![JSONNumber doubleValue] >= [schema[keyword] doubleValue]) {
+                        return FALSE;
+                    }
+                }
+            }
+        }
+    }
+    return TRUE;
+}
+
 -(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSMutableDictionary*)schema
 {
     static NSArray * dictionaryKeywords;
@@ -196,7 +240,7 @@
     
     for (NSString * keyword in dictionaryKeywords) {
         if (schema[keyword] != nil) {
-            if ([keyword isEqualToString:@"additionalItems@"]) {
+            if ([keyword isEqualToString:@"additionalItems"]) {
                 id additionalItems = schema[keyword];
                 if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == TRUE) { //TODO: better test for boolean?
                     additionalItems = [NSDictionary new];
