@@ -31,7 +31,9 @@
         rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
                                                                     options:kNilOptions
                                                                       error:&error];
+        NSLog(@"Root Schema: %@", rootSchema);
     });
+    
     return rootSchema;
 }
 
@@ -86,7 +88,7 @@
     // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
     //first validate the schema against the root schema then validate against the original
     //first check valid json (use NSJSONSerialization)
-    NSLog(@"Root Schema: %@", self.rootSchema);
+    
     if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
         return FALSE; //error: invalid schema
     }
@@ -95,6 +97,7 @@
     }
     return TRUE;
 }
+
 -(BOOL)_validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
     //TODO: synonyms (potentially in higher level too)
@@ -107,7 +110,7 @@
         allKeywords = @[@"multipleOf", @"maximum", @"exclusiveMaximum", @"minimum", @"exclusiveMinimum",
                         @"maxLength", @"minLength", @"pattern",
                         @"maxProperties", @"minProperties", @"required", @"properties", @"patternProperties", @"additionalProperties", @"dependencies",
-                        @"additionalItems@", @"items", @"maxItems", @"minItems", @"uniqueItems",
+                        @"additionalItems", @"items", @"maxItems", @"minItems", @"uniqueItems",
                         @"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
     });
     //The "id" keyword (or "id", for short) is used to alter the resolution scope. When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
@@ -123,7 +126,7 @@
     //the strategy for defaults is to dive one deeper and replace *just* ahead of where we are
     for (NSString * keyword in allKeywords) {
         if ([schema[keyword] isKindOfClass:[NSDictionary class]] && schema[keyword][@"default"] != nil && [json isKindOfClass:[NSDictionary class]] && [json objectForKey:keyword] == nil) {//this only does shallow defaults replacement
-            [json setObject:schema[keyword][@"default"] forKey:keyword];
+            [json setObject:[schema[keyword][@"default"] mutableCopy] forKey:keyword];
         }
     }
     
@@ -139,7 +142,7 @@
         } else {
             typeValidator = @selector(_validateJSONNumeric:withSchemaDict:);
             double num = [json doubleValue];
-            if ((num - floor(num)) != 0.0) {
+            if ((num - floor(num)) == 0.0) {
                 type = @"integer";
             } else {
                 type = @"number";
@@ -171,9 +174,14 @@
                 }
             } else if ([keyword isEqualToString:@"allOf"]) {
                 for (NSDictionary * subSchema in schema[keyword]) {
-                    
+                    if (![self _validateJSON:json withSchemaDict:subSchema]) { return FALSE; }
                 }
             } else if ([keyword isEqualToString:@"anyOf"]) {
+                for (NSDictionary * subSchema in schema[keyword]) {
+                    if ([self _validateJSON:json withSchemaDict:subSchema]) { goto anyOfSuccess; } //yeah I did... yea. I. did. (in all seriousness, this needs splitting out into a new function, so that it can do the equivalen and 'return TRUE'.)
+                }
+                return FALSE;
+                anyOfSuccess: {}
             } else if ([keyword isEqualToString:@"oneOf"]) {
             } else if ([keyword isEqualToString:@"not"]) {
             } else if ([keyword isEqualToString:@"definitions"]) {
@@ -357,7 +365,7 @@
                     NSMutableSet * additionalKeys = [allKeys mutableCopy];
                     [additionalKeys minusSet:[testSchemas keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }]];
                     for (NSString * key in additionalKeys) {
-                        testSchemas[key] = additionalPropsSchema;
+                        testSchemas[key] = [NSMutableArray arrayWithObject:additionalPropsSchema];
                     }
                 }
                 
@@ -365,15 +373,8 @@
                 for (NSString * property in [testSchemas keyEnumerator]) {
                     NSArray * subschemas = testSchemas[property];
                     for (NSDictionary * subschema in subschemas) {
-                        //TODO: call private validator
-                        if ([schema isEqual:self.rootSchema]) {
-                            if (![self _validateJSON:JSONDict[property] withSchemaDict:subschema]) {
-                                return FALSE;
-                            }
-                        } else {
-                            if (![self validateJSON:JSONDict[property] withSchemaDict:subschema]) {
-                                return FALSE;
-                            }
+                        if (![self _validateJSON:JSONDict[property] withSchemaDict:subschema]) {
+                            return FALSE;
                         }
                     }
                 }
@@ -387,15 +388,8 @@
                             NSDictionary * schemaDependency = dependency;
                             //For all (name, schema) pair of schema dependencies, if the instance has a property by this name, then it must also validate successfully against the schema.
                             //Note that this is the instance itself which must validate successfully, not the value associated with the property name.
-                            //TODO:(should probably call private validator)
-                            if ([schema isEqual:self.rootSchema]) {
-                                if (![self _validateJSON:JSONDict withSchemaDict:schemaDependency[name]]) {
-                                    return FALSE;
-                                }
-                            } else {
-                                if (![self validateJSON:JSONDict withSchemaDict:schemaDependency[name]]) {
-                                    return FALSE;
-                                }
+                            if (![self _validateJSON:JSONDict withSchemaDict:schemaDependency[name]]) {
+                                return FALSE;
                             }
                         } else if ([dependency isKindOfClass:[NSArray class]]) {
                             NSArray * propertyDependency = dependency;
@@ -433,39 +427,21 @@
                     id child = JSONArray[index];
                     if ([items isKindOfClass:[NSDictionary class]]) {
                         //If items is a schema, then the child instance must be valid against this schema, regardless of its index, and regardless of the value of "additionalItems".
-                        if ([schema isEqual:self.rootSchema]) {
-                            if (![self _validateJSON:JSONArray[index] withSchemaDict:items]) {
-                                return FALSE;
-                            }
-                        } else {
-                            if (![self validateJSON:JSONArray[index] withSchemaDict:items]) {
-                                return FALSE;
-                            }
+                        if (![self _validateJSON:JSONArray[index] withSchemaDict:items]) {
+                            return FALSE;
                         }
                     } else if ([items isKindOfClass:[NSArray class]]) {
                         if (index < [items count]) {
-                            if ([schema isEqual:self.rootSchema]) {
-                                if (![self _validateJSON:child withSchemaDict:items[index]]) {
-                                    return FALSE;
-                                }
-                            } else {
-                                if (![self validateJSON:child withSchemaDict:items[index]]) {
-                                    return FALSE;
-                                }
+                            if (![self _validateJSON:child withSchemaDict:items[index]]) {
+                                return FALSE;
                             }
                         } else {
                             if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == FALSE) {
                                 //if the value of "additionalItems" is boolean value false and the value of "items" is an array, the instance is valid if its size is less than, or equal to, the size of "items".
                                 return FALSE;
                             } else {
-                                if ([schema isEqual:self.rootSchema]) {
-                                    if (![self _validateJSON:child withSchemaDict:additionalItems]) {
-                                        return FALSE;
-                                    }
-                                } else {
-                                    if (![self validateJSON:child withSchemaDict:additionalItems]) {
-                                        return FALSE;
-                                    }
+                                if (![self _validateJSON:child withSchemaDict:additionalItems]) {
+                                    return FALSE;
                                 }
                             }
                         }
