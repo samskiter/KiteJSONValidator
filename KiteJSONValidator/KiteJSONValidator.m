@@ -64,76 +64,107 @@
 {
     //TODO: replace all top level refs
     
-    static NSArray * dictionaryKeywords;
+    static NSArray * anyInstanceKeywords;
+    static NSArray * allKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
+        anyInstanceKeywords = @[@"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
+//        allKeywords = @[@"multipleOf", @"maximum", @"exclusiveMaximum", @"minimum", @"exclusiveMinimum",
+//                        @"maxLength", @"minLength", @"pattern",
+//                        @"maxProperties", @"minProperties", @"required", @"properties", @"patternProperties", @"additionalProperties", @"dependencies",
+//                        @"additionalItems@", @"items", @"maxItems", @"minItems", @"uniqueItems",
+//                        @"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
     });
+    //The "id" keyword (or "id", for short) is used to alter the resolution scope. When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
+    //SO we need a scopeURI
+    
     /*"title" and "description"
      6.1.1.  Valid values
      6.1.2.  Purpose
      6.2.  "default"
      format <- optional*/
     
+    /* Defaults */
+    //the strategy for defaults is to dive one deeper and replace *just* ahead of where we are
+    for (NSString * keyword in schema.keyEnumerator) {
+        if (schema[keyword][@"default"] != nil && [json isKindOfClass:[NSDictionary class]] && [json objectForKey:keyword] == nil) {
+            json = [NSMutableDictionary dictionaryWithDictionary:json]; //This won't work for nested defaults
+            [json setObject:schema[keyword][@"default"] forKey:keyword];
+        }
+    }
+    
+    NSString * type;
+    SEL typeValidator;
+    if ([json isKindOfClass:[NSArray class]]) {
+        type = @"array";
+        typeValidator = @selector(_validateJSONArray:withSchemaDict:);
+    } else if ([json isKindOfClass:[NSNumber class]]) {
+        assert(strcmp([[NSNumber numberWithBool:YES] objCType], @encode(char)) == 0);
+        if (strcmp([json objCType], @encode(char)) == 0) {
+            type = @"boolean";
+        } else {
+            typeValidator = @selector(_validateJSONNumeric:withSchemaDict:);
+            double num = [json doubleValue];
+            if ((num - floor(num)) != 0.0) {
+                type = @"integer";
+            } else {
+                type = @"number";
+            }
+        }
+    }else if ([json isKindOfClass:[NSNull class]]) {
+        type = @"null";
+    } else if ([json isKindOfClass:[NSDictionary class]]) {
+        type = @"object";
+        typeValidator = @selector(_validateJSONObject:withSchemaDict:);
+    } else if ([json isKindOfClass:[NSString class]]) {
+        type = @"string";
+        typeValidator = @selector(_validateJSONString:withSchemaDict:);
+    } else {
+        return FALSE; // the schema is not one of the valid types.
+    }
     
     //TODO: extract the types first before the check (if there is no type specified, we'll never hit the checking code
-    for (NSString * keyword in dictionaryKeywords) {
+    for (NSString * keyword in anyInstanceKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"enum"]) {
+                //An instance validates successfully against this keyword if its value is equal to one of the elements in this keyword's array value.
                 if (![schema[keyword] containsObject:json]) { return FALSE; }
             } else if ([keyword isEqualToString:@"type"]) {
-                if ([schema[keyword] isEqualToString:@"array"]) {
-                    if (![json isKindOfClass:[NSArray class]]) { return FALSE; }
-                } else if ([schema[keyword] isEqualToString:@"boolean"]) {
-                    //boolean checking is limited, but we'll ensure its an integer and it is 1 or 0;
-                    if (![json isKindOfClass:[NSNumber class]]) {
-                        return FALSE;
-                    } else {
-                        double num = [json doubleValue];
-                        if ((num - floor(num)) != 0.0 || (num != 1.0 || num != 0.0)) {
-                            return FALSE;
-                        }
-                    }
-                } else if ([schema[keyword] isEqualToString:@"integer"]) {
-                    if (![json isKindOfClass:[NSNumber class]]) {
-                        return FALSE;
-                    } else {
-                        double num = [json doubleValue];
-                        if ((num - floor(num)) != 0.0) {
-                            return FALSE;
-                        }
-                    }
-                } else if ([schema[keyword] isEqualToString:@"null"]) {
-                    if (![json isKindOfClass:[NSNull class]]) { return FALSE; }
-                } else if ([schema[keyword] isEqualToString:@"number"]) {
-                    if (![json isKindOfClass:[NSNumber class]]) { return FALSE; }
-                } else if ([schema[keyword] isEqualToString:@"object"]) {
-                    if (![json isKindOfClass:[NSDictionary class]]) { return FALSE; }
-                } else if ([schema[keyword] isEqualToString:@"string"]) {
-                    if (![json isKindOfClass:[NSString class]]) { return FALSE; }
-                }
+                if (![schema[keyword] isEqualToString:type]) { return FALSE; }
             } else if ([keyword isEqualToString:@"allOf"]) {
                 
             } else if ([keyword isEqualToString:@"anyOf"]) {
             } else if ([keyword isEqualToString:@"oneOf"]) {
             } else if ([keyword isEqualToString:@"not"]) {
             } else if ([keyword isEqualToString:@"definitions"]) {
+                
             }
         }
     }
-    return FALSE;
+    
+    
+    
+    if (typeValidator != nil) {
+        IMP imp = [self methodForSelector:typeValidator];
+        BOOL (*func)(id, SEL, id, id) = (void *)imp;
+        if (!func(self, typeValidator, json, schema)) {
+            return FALSE;
+        }
+    }
+    
+    return TRUE;
 }
 
 //for number and integer
 -(BOOL)_validateJSONNumeric:(NSNumber*)JSONNumber withSchemaDict:(NSDictionary*)schema
 {
-    static NSArray * dictionaryKeywords;
+    static NSArray * numericKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"multipleOf", @"maximum",/* @"exclusiveMaximum",*/ @"minimum",/* @"exclusiveMinimum"*/];
+        numericKeywords = @[@"multipleOf", @"maximum",/* @"exclusiveMaximum",*/ @"minimum",/* @"exclusiveMinimum"*/];
     });
     
-    for (NSString * keyword in dictionaryKeywords) {
+    for (NSString * keyword in numericKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"multipleOf"]) {
                 //A numeric instance is valid against "multipleOf" if the result of the division of the instance by this keyword's value is an integer.
@@ -173,13 +204,13 @@
 
 -(BOOL)_validateJSONString:(NSString*)JSONString withSchemaDict:(NSDictionary*)schema
 {
-    static NSArray * dictionaryKeywords;
+    static NSArray * stringKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"maxLength", @"minLength", @"pattern"];
+        stringKeywords = @[@"maxLength", @"minLength", @"pattern"];
     });
     
-    for (NSString * keyword in dictionaryKeywords) {
+    for (NSString * keyword in stringKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"maxLength"]) {
                 //A string instance is valid against this keyword if its length is less than, or equal to, the value of this keyword.
@@ -208,14 +239,13 @@
 
 -(BOOL)_validateJSONObject:(NSDictionary*)JSONDict withSchemaDict:(NSDictionary*)schema
 {
-    static NSArray * dictionaryKeywords;
+    static NSArray * objectKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties",/* @"patternProperties", @"additionalProperties",*/ @"dependencies"];
+        objectKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties",/* @"patternProperties", @"additionalProperties",*/ @"dependencies"];
     });
     
-    NSMutableDictionary * propertySchema = [NSMutableDictionary dictionaryWithSharedKeySet:[NSDictionary sharedKeySetForKeys:[JSONDict allKeys]]];
-    for (NSString * keyword in dictionaryKeywords) {
+    for (NSString * keyword in objectKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"maxProperties"]) {
                 //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
@@ -335,13 +365,13 @@
 
 -(BOOL)_validateJSONArray:(NSArray*)JSONArray withSchemaDict:(NSDictionary*)schema
 {
-    static NSArray * dictionaryKeywords;
+    static NSArray * arrayKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dictionaryKeywords = @[@"additionalItems@",/* @"items",*/ @"maxItems", @"minItems", @"uniqueItems"];
+        arrayKeywords = @[@"additionalItems@",/* @"items",*/ @"maxItems", @"minItems", @"uniqueItems"];
     });
     
-    for (NSString * keyword in dictionaryKeywords) {
+    for (NSString * keyword in arrayKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"additionalItems"]) {
                 id additionalItems = schema[keyword];
