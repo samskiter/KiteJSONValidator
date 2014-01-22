@@ -38,6 +38,13 @@
 -(id)validatedJSONInstance:(id)json forSchema:(NSDictionary*)schema;
 {
     NSError * error;
+    if (![NSJSONSerialization isValidJSONObject:json]) {
+#ifdef DEBUG
+        //for tests we could wrap this inside a dictionary with a predefined key and unwrap it in the next function
+#else
+#endif
+        return nil;
+    }
     NSData * jsonData = [NSJSONSerialization dataWithJSONObject:json options:0 error:&error];
     if (error != nil) {
         return nil;
@@ -118,7 +125,7 @@
     }
     
     NSString * type;
-    SEL typeValidator;
+    SEL typeValidator = nil;
     if ([json isKindOfClass:[NSArray class]]) {
         type = @"array";
         typeValidator = @selector(_validateJSONArray:withSchemaDict:);
@@ -154,7 +161,11 @@
                 //An instance validates successfully against this keyword if its value is equal to one of the elements in this keyword's array value.
                 if (![schema[keyword] containsObject:json]) { return FALSE; }
             } else if ([keyword isEqualToString:@"type"]) {
-                if (![schema[keyword] isEqualToString:type]) { return FALSE; }
+                if ([schema[keyword] isKindOfClass:[NSString class]]) {
+                    if (![schema[keyword] isEqualToString:type]) { return FALSE; }
+                } else { //array
+                    if (![schema[keyword] containsObject:type]) { return FALSE; }
+                }
             } else if ([keyword isEqualToString:@"allOf"]) {
                 for (NSDictionary * subSchema in schema[keyword]) {
                     
@@ -167,8 +178,6 @@
             }
         }
     }
-    
-    
     
     if (typeValidator != nil) {
         IMP imp = [self methodForSelector:typeValidator];
