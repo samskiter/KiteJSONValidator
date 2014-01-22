@@ -18,6 +18,7 @@
  @param schema The draft4 JSON schema to validate against
  @return Whether the json is validated.
  */
--(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary*)schema;
+-(id)validatedJSONData:(NSData*)jsonData forSchemaData:(NSData*)schemaData;
+-(id)validatedJSONInstance:(id)json forSchema:(NSDictionary*)schema;
 
 @end
