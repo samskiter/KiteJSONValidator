@@ -41,9 +41,12 @@
     if (![NSJSONSerialization isValidJSONObject:json]) {
 #ifdef DEBUG
         //for tests we could wrap this inside a dictionary with a predefined key and unwrap it in the next function
+        json = [NSDictionary dictionaryWithObject:json forKey:@"debugInvalidTopTypeKey"];
+        schema = [NSDictionary dictionaryWithObject:[NSDictionary dictionaryWithObject:schema forKey:@"debugInvalidTopTypeKey"]
+                                             forKey:@"properties"];
 #else
-#endif
         return nil;
+#endif
     }
     NSData * jsonData = [NSJSONSerialization dataWithJSONObject:json options:0 error:&error];
     if (error != nil) {
