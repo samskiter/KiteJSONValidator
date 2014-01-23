@@ -8,8 +8,21 @@
 
 #import "KiteJSONValidator.h"
 
-@implementation KiteJSONValidator
+@interface KiteJSONValidatorScope : NSObject
+@property (nonatomic,strong) NSURL * uri;
+@property (nonatomic,strong) NSDictionary * schema;
+@end
 
+@implementation KiteJSONValidatorScope
+@end
+
+@interface KiteJSONValidator()
+
+@property (nonatomic,strong) NSMutableArray * scopeStack;
+
+@end
+
+@implementation KiteJSONValidator
 
 
 +(BOOL)propertyIsInteger:(id)property
@@ -37,12 +50,50 @@
     return rootSchema;
 }
 
+-(void)pushScopeWithId:(NSURL*)idURI forSchema:(NSDictionary*)schema
+{
+    //relativePath NOT relative string for everything after the host. relativePath doesNOT include the fragment)
+    //if the scope is complete (see link) then it goes in as is. If it begins with # then it is a json-pointer fragment and should be appended. (does it replace any existing fragment?)
+    //http://stackoverflow.com/questions/1471201/how-to-validate-an-url-on-the-iphone
+    //http://stackoverflow.com/questions/5903157/ios-parse-a-url-into-segments
+    KiteJSONValidatorScope * scope = [KiteJSONValidatorScope new];
+    scope.schema = schema;
+    if (self.scopeStack == nil) {
+        self.scopeStack = [NSMutableArray new];
+        scope.uri = idURI;
+    }
+    if (idURI && idURI.scheme && idURI.host) {
+        // candidate is a well-formed url with:
+        //  - a scheme (like http://)
+        //  - a host (like stackoverflow.com)
+        
+    } else {
+        //When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
+        KiteJSONValidatorScope * parentScope = self.scopeStack.lastObject;
+        NSURL * parentURI = parentScope.uri;
+//        if (uri.path)
+    }
+    [self.scopeStack addObject:schema];
+}
+
+//-(void)popScope
+//{
+//    
+//}
+//
+//-(NSDictionary *)getSchemaForReferenceString:(NSString*)refString
+//{
+//    //if it is a json pointer, we can use that in combination with the current scope to get the full json-reference
+//    NSURL *
+//    
+//}
+
 -(id)validatedJSONInstance:(id)json forSchema:(NSDictionary*)schema;
 {
     NSError * error;
     if (![NSJSONSerialization isValidJSONObject:json]) {
 #ifdef DEBUG
-        //for tests we could wrap this inside a dictionary with a predefined key and unwrap it in the next function
+        //in order to pass the tests
         json = [NSDictionary dictionaryWithObject:json forKey:@"debugInvalidTopTypeKey"];
         schema = [NSDictionary dictionaryWithObject:[NSDictionary dictionaryWithObject:schema forKey:@"debugInvalidTopTypeKey"]
                                              forKey:@"properties"];
@@ -115,6 +166,18 @@
     });
     //The "id" keyword (or "id", for short) is used to alter the resolution scope. When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
     //SO we need a scopeURI
+    NSURL * testurl = [NSURL URLWithString:@"dfkjh://hello.com/blah/bee/#/boo/baa/foo"];
+    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
+    NSURL * testurl2 = [NSURL URLWithString:testurl.fragment];
+    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl2.scheme, testurl2.host, testurl2.path, testurl2.relativePath, testurl2.pathComponents, testurl2.fragment);
+    //fragment has to begin with a '/'
+    testurl = [NSURL URLWithString:@"#/new/frag/ment" relativeToURL:testurl];
+    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
+    NSLog(@"standardizedURL: %@", testurl.standardizedURL);
+    
+    testurl = [NSURL URLWithString:@"/new/path#/newer/fraga/menta" relativeToURL:testurl];
+    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
+    NSLog(@"standardizedURL: %@", testurl.standardizedURL);
     
     /*"title" and "description"
      6.1.1.  Valid values
