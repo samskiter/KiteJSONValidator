@@ -176,19 +176,19 @@
     NSError * error;
     id json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
     if (error != nil) {
-        return nil;
+        return FALSE;
     }
     id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
     if (error != nil) {
-        return nil;
+        return FALSE;
     }
     if (![schema isKindOfClass:[NSDictionary class]]) {
-        return nil;
+        return FALSE;
     }
-    if ([self validateJSON:json withSchemaDict:schema]) {
-        return json;
+    if (![self validateJSON:json withSchemaDict:schema]) {
+        return FALSE;
     }
-    return  nil;
+    return TRUE;
 }
 
 -(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
@@ -235,19 +235,6 @@
                         @"enum", @"type", @"allOf", @"anyOf", @"oneOf", @"not", @"definitions"];
     });
     //The "id" keyword (or "id", for short) is used to alter the resolution scope. When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
-    //SO we need a scopeURI
-    NSURL * testurl = [NSURL URLWithString:@"dfkjh://hello.com/blah/bee/#/boo/baa/foo"];
-    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
-    NSURL * testurl2 = [NSURL URLWithString:testurl.fragment];
-    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl2.scheme, testurl2.host, testurl2.path, testurl2.relativePath, testurl2.pathComponents, testurl2.fragment);
-    //fragment has to begin with a '/'
-    testurl = [NSURL URLWithString:@"#/new/frag/ment" relativeToURL:testurl];
-    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
-    NSLog(@"standardizedURL: %@", testurl.standardizedURL);
-    
-    testurl = [NSURL URLWithString:@"/new/path#/newer/fraga/menta" relativeToURL:testurl];
-    NSLog(@"Scheme: %@ Host: %@ Path: %@ RelativePath: %@ PathComponents: %@ Fragment: %@", testurl.scheme, testurl.host, testurl.path, testurl.relativePath, testurl.pathComponents, testurl.fragment);
-    NSLog(@"standardizedURL: %@", testurl.standardizedURL);
     
     /*"title" and "description"
      6.1.1.  Valid values
@@ -323,7 +310,14 @@
                 return FALSE;
                 anyOfSuccess: {}
             } else if ([keyword isEqualToString:@"oneOf"]) {
+                int passes = 0;
+                for (NSDictionary * subSchema in schema[keyword]) {
+                    if ([self _validateJSON:json withSchemaDict:subSchema]) { passes++; }
+                    if (passes > 1) { return FALSE; }
+                }
+                if (passes != 1) { return FALSE; }
             } else if ([keyword isEqualToString:@"not"]) {
+                if ([self _validateJSON:json withSchemaDict:schema[keyword]]) { return FALSE; }
             } else if ([keyword isEqualToString:@"definitions"]) {
                 
             }
@@ -359,25 +353,25 @@
                     return FALSE;
                 }
             } else if ([keyword isEqualToString:@"maximum"]) {
-                if (schema[@"exclusiveMaximum"]) {
-                    if (![JSONNumber doubleValue] < [schema[keyword] doubleValue]) {
+                if ([schema[@"exclusiveMaximum"] isKindOfClass:[NSNumber class]] && [schema[@"exclusiveMaximum"] boolValue] == TRUE) {
+                    if (!([JSONNumber doubleValue] < [schema[keyword] doubleValue])) {
                         //if "exclusiveMaximum" has boolean value true, the instance is valid if it is strictly lower than the value of "maximum".
                         return FALSE;
                     }
                 } else {
-                    if (![JSONNumber doubleValue] <= [schema[keyword] doubleValue]) {
+                    if (!([JSONNumber doubleValue] <= [schema[keyword] doubleValue])) {
                         //if "exclusiveMaximum" is not present, or has boolean value false, then the instance is valid if it is lower than, or equal to, the value of "maximum"
                         return FALSE;
                     }
                 }
             } else if ([keyword isEqualToString:@"minimum"]) {
-                if (schema[@"exclusiveMinimum"]) {
-                    if (![JSONNumber doubleValue] > [schema[keyword] doubleValue]) {
+                if ([schema[@"exclusiveMinimum"] isKindOfClass:[NSNumber class]] && [schema[@"exclusiveMinimum"] boolValue] == TRUE) {
+                    if (!([JSONNumber doubleValue] > [schema[keyword] doubleValue])) {
                         //if "exclusiveMinimum" is present and has boolean value true, the instance is valid if it is strictly greater than the value of "minimum".
                         return FALSE;
                     }
                 } else {
-                    if (![JSONNumber doubleValue] >= [schema[keyword] doubleValue]) {
+                    if (!([JSONNumber doubleValue] >= [schema[keyword] doubleValue])) {
                         //if "exclusiveMinimum" is not present, or has boolean value false, then the instance is valid if it is greater than, or equal to, the value of "minimum"
                         return FALSE;
                     }
@@ -400,10 +394,10 @@
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"maxLength"]) {
                 //A string instance is valid against this keyword if its length is less than, or equal to, the value of this keyword.
-                if (!JSONString.length <= [schema[keyword] intValue]) { return FALSE; }
+                if (!(JSONString.length <= [schema[keyword] intValue])) { return FALSE; }
             } else if ([keyword isEqualToString:@"minLength"]) {
                 //A string instance is valid against this keyword if its length is greater than, or equal to, the value of this keyword.
-                if (!JSONString.length >= [schema[keyword] intValue]) { return FALSE; }
+                if (!(JSONString.length >= [schema[keyword] intValue])) { return FALSE; }
             } else if ([keyword isEqualToString:@"pattern"]) {
                 //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
                 //This string SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
@@ -454,7 +448,12 @@
                 id additionalProperties = schema[@"additionalProperties"];
                 if (properties == nil) { properties = [NSDictionary new]; }
                 if (patternProperties == nil) { patternProperties = [NSDictionary new]; }
-                if (additionalProperties == nil) { additionalProperties = [NSDictionary new]; }
+                if (additionalProperties == nil) {
+                    additionalProperties = [NSDictionary new]; }
+                if ([additionalProperties isKindOfClass:[NSNumber class]] && strcmp([additionalProperties objCType], @encode(char)) == 0 && [additionalProperties boolValue] == TRUE) {
+                    additionalProperties = [NSDictionary new];
+                }
+                
                 /** calculating children schemas **/
                 //The calculation of the children schemas is combined with the checking of present keys
                 NSSet * p = [NSSet setWithArray:[properties allKeys]];
@@ -494,7 +493,7 @@
                 //Successful validation of an object instance against these three keywords depends on the value of "additionalProperties":
                 //    if its value is boolean true or a schema, validation succeeds;
                 //    if its value is boolean false, the algorithm to determine validation success is described below.
-                if (!additionalProperties) { //value must therefore be boolean false
+                if ([additionalProperties isKindOfClass:[NSNumber class]] && [additionalProperties boolValue] == FALSE) { //value must therefore be boolean false
                     //Because we have built a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
                     //Validation of the instance succeeds if, after these two steps, set "s" is empty.
                     if (testSchemas.count < allKeys.count) {
@@ -504,7 +503,8 @@
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
                     NSDictionary * additionalPropsSchema;
                     //In addition, boolean value true for "additionalItems" is considered equivalent to an empty schema.
-                    if ([additionalProperties isKindOfClass:[NSNumber class]]) { //TODO: better check for bool?
+                    
+                    if ([additionalProperties isKindOfClass:[NSNumber class]] && strcmp([additionalProperties objCType], @encode(char)) == 0) {
                         additionalPropsSchema = [NSDictionary new];
                     } else {
                         additionalPropsSchema = additionalProperties;
@@ -559,7 +559,7 @@
     static NSArray * arrayKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        arrayKeywords = @[@"additionalItems@", @"items", @"maxItems", @"minItems", @"uniqueItems"];
+        arrayKeywords = @[@"additionalItems", @"items", @"maxItems", @"minItems", @"uniqueItems"];
     });
     
     BOOL doneItems = FALSE;
@@ -571,7 +571,7 @@
                 id items = schema[@"items"];
                 if (additionalItems == nil) { additionalItems = [NSDictionary new];}
                 if (items == nil) { items = [NSDictionary new];}
-                if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == TRUE) { //TODO: better test for boolean?
+                if ([additionalItems isKindOfClass:[NSNumber class]] && strcmp([additionalItems objCType], @encode(char)) == 0 && [additionalItems boolValue] == TRUE) {
                     additionalItems = [NSDictionary new];
                 }
                 
@@ -606,7 +606,7 @@
             } else if ([keyword isEqualToString:@"minItems"]) {
                 if ([JSONArray count] < [schema[keyword] intValue]) { return FALSE; }
             } else if ([keyword isEqualToString:@"uniqueItems"]) {
-                if (schema[keyword]) {
+                if ([schema[keyword] isKindOfClass:[NSNumber class]] && [schema[keyword] boolValue] == TRUE) {
                     //If it has boolean value true, the instance validates successfully if all of its elements are unique.
                     NSSet * items = [NSSet setWithArray:JSONArray];
                     if ([items count] < [JSONArray count]) { return FALSE; }

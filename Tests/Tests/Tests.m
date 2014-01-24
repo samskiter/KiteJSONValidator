@@ -49,9 +49,13 @@
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
+                if ([json[@"description"] isEqualToString:@"0 and false are unique"]) {
+                    
+                }
                 BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
-                if (result != (BOOL)json[@"valid"]) {
-                    XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], !result);
+                BOOL desired = [json[@"valid"] boolValue];
+                if (result != desired) {
+                    XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
                 }
             }
         }
