@@ -7,6 +7,7 @@
 //
 
 #import "KiteJSONValidator.h"
+#import "Pair.h"
 
 @interface KiteJSONValidatorScope : NSObject
 @property (nonatomic,strong) NSURL * uri;
@@ -18,7 +19,8 @@
 
 @interface KiteJSONValidator()
 
-@property (nonatomic,strong) NSMutableArray * scopeStack;
+@property (nonatomic,strong) NSMutableArray * validationStack;
+@property (nonatomic,strong) NSMutableArray * resolutionStack;
 
 @end
 
@@ -50,43 +52,100 @@
     return rootSchema;
 }
 
--(void)pushScopeWithId:(NSURL*)idURI forSchema:(NSDictionary*)schema
+//-(void)pushScopeWithId:(NSURL*)idURI forSchema:(NSDictionary*)schema
+//{
+//    //relativePath NOT relative string for everything after the host. relativePath doesNOT include the fragment)
+//    //if the scope is complete (see link) then it goes in as is. If it begins with # then it is a json-pointer fragment and should be appended. (does it replace any existing fragment?)
+//    //http://stackoverflow.com/questions/1471201/how-to-validate-an-url-on-the-iphone
+//    //http://stackoverflow.com/questions/5903157/ios-parse-a-url-into-segments
+//    KiteJSONValidatorScope * scope = [KiteJSONValidatorScope new];
+//    scope.schema = schema;
+//    if (self.scopeStack == nil) {
+//        self.scopeStack = [NSMutableArray new];
+//        scope.uri = idURI;
+//    }
+//    if (idURI && idURI.scheme && idURI.host) {
+//        // candidate is a well-formed url with:
+//        //  - a scheme (like http://)
+//        //  - a host (like stackoverflow.com)
+//        
+//    } else {
+//        //When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
+//        KiteJSONValidatorScope * parentScope = self.scopeStack.lastObject;
+//        NSURL * parentURI = parentScope.uri;
+////        if (uri.path)
+//    }
+//    [self.scopeStack addObject:schema];
+//}
+
+-(BOOL)pushToStackJSON:(id)json forSchema:(NSDictionary*)schema
 {
-    //relativePath NOT relative string for everything after the host. relativePath doesNOT include the fragment)
-    //if the scope is complete (see link) then it goes in as is. If it begins with # then it is a json-pointer fragment and should be appended. (does it replace any existing fragment?)
-    //http://stackoverflow.com/questions/1471201/how-to-validate-an-url-on-the-iphone
-    //http://stackoverflow.com/questions/5903157/ios-parse-a-url-into-segments
-    KiteJSONValidatorScope * scope = [KiteJSONValidatorScope new];
-    scope.schema = schema;
-    if (self.scopeStack == nil) {
-        self.scopeStack = [NSMutableArray new];
-        scope.uri = idURI;
+    if (self.validationStack == nil) {
+        self.validationStack = [NSMutableArray new];
+        self.resolutionStack = [NSMutableArray new];
     }
-    if (idURI && idURI.scheme && idURI.host) {
-        // candidate is a well-formed url with:
-        //  - a scheme (like http://)
-        //  - a host (like stackoverflow.com)
-        
-    } else {
-        //When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
-        KiteJSONValidatorScope * parentScope = self.scopeStack.lastObject;
-        NSURL * parentURI = parentScope.uri;
-//        if (uri.path)
-    }
-    [self.scopeStack addObject:schema];
+    Pair * pair = [Pair pairWithLeft:json right:schema];
+    if ([self.validationStack containsObject:pair]) { return FALSE; }
+    NSURL * lastResolution = self.resolutionStack.lastObject;
+    if (lastResolution == nil) { lastResolution = [NSURL URLWithString:@""]; }
+    [self.validationStack addObject:pair];
+    [self.resolutionStack addObject:lastResolution];
+    return TRUE;
 }
 
-//-(void)popScope
-//{
-//    
-//}
-//
-//-(NSDictionary *)getSchemaForReferenceString:(NSString*)refString
-//{
-//    //if it is a json pointer, we can use that in combination with the current scope to get the full json-reference
-//    NSURL *
-//    
-//}
+-(void)popStack
+{
+    [self.validationStack removeLastObject];
+    [self.resolutionStack removeLastObject];
+}
+
+-(NSURL*)urlWithoutFragment:(NSURL*)url
+{
+    NSString * refString = url.absoluteString;
+    return [NSURL URLWithString:[refString stringByReplacingOccurrencesOfString:url.fragment
+                                                                     withString:@""
+                                                                        options:NSBackwardsSearch
+                                                                          range:NSMakeRange(0, refString.length)]];
+}
+
+-(NSDictionary *)getSchemaForReferenceString:(NSString*)refString
+{
+    NSURL * refURI = [NSURL URLWithString:refString relativeToURL:self.resolutionStack.lastObject];
+    //remove the fragment, if it is a JSON-Pointer
+    NSArray * pointerComponents;
+    if (refURI.fragment && [refURI.fragment hasPrefix:@"/"]) {
+        NSURL * pointerURI = [NSURL URLWithString:refURI.fragment];
+        pointerComponents = [pointerURI pathComponents];
+        refURI = [self urlWithoutFragment:refURI];
+    }
+    
+    //first get the document, then resolve any pointers.
+    NSURL * lastResolution = self.validationStack.lastObject;
+    NSDictionary * schema;
+    if ([lastResolution isEqual:refURI]) {
+        schema = (NSDictionary*)[self.validationStack.lastObject right];
+    } else {
+        return nil;
+    }
+    for (NSString * component in pointerComponents) {
+        if (![component isEqualToString:@"/"]) {
+            if ([schema isKindOfClass:[NSDictionary class]] && schema[component] != nil) {
+                schema = schema[component];
+            } else {
+                return nil;
+            }
+        }
+    }
+    return schema;
+}
+
+-(void)setResolution:(NSString *)resolution
+{
+    //we should warn if the resolution contains a JSON-Pointer (these are a bad idea in an ID)
+    NSURL * idURI = [self urlWithoutFragment:[NSURL URLWithString:resolution relativeToURL:self.resolutionStack.lastObject]];
+    [self.resolutionStack removeLastObject];
+    [self.resolutionStack addObject:idURI];
+}
 
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 {
@@ -132,7 +191,6 @@
     return  nil;
 }
 
-
 -(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
     //need to make sure the validation of schema doesn't infinitely recurse (self references)
@@ -150,6 +208,18 @@
 }
 
 -(BOOL)_validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
+{
+    assert(schema != nil);
+    //check stack for JSON and schema
+    //push to stack the json and the schema.
+    [self pushToStackJSON:json forSchema:schema];
+    BOOL result = [self __validateJSON:json withSchemaDict:schema];
+    //pop from the stack
+    [self popStack];
+    return result;
+}
+
+-(BOOL)__validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
     //TODO: synonyms (potentially in higher level too)
     
@@ -193,6 +263,7 @@
 //        }
 //    }
     
+    
     NSString * type;
     SEL typeValidator = nil;
     if ([json isKindOfClass:[NSArray class]]) {
@@ -216,6 +287,12 @@
     } else if ([json isKindOfClass:[NSDictionary class]]) {
         type = @"object";
         typeValidator = @selector(_validateJSONObject:withSchemaDict:);
+        if (json[@"$ref"] != nil) {
+            if (![json[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
+            NSDictionary * refSchema = [self getSchemaForReferenceString:json[@"ref"]];
+            if (refSchema == nil) { return FALSE; } //couldn't find ref
+            return [self _validateJSON:json withSchemaDict:refSchema];
+        }
     } else if ([json isKindOfClass:[NSString class]]) {
         type = @"string";
         typeValidator = @selector(_validateJSONString:withSchemaDict:);
@@ -458,7 +535,7 @@
                             NSDictionary * schemaDependency = dependency;
                             //For all (name, schema) pair of schema dependencies, if the instance has a property by this name, then it must also validate successfully against the schema.
                             //Note that this is the instance itself which must validate successfully, not the value associated with the property name.
-                            if (![self _validateJSON:JSONDict withSchemaDict:schemaDependency[name]]) {
+                            if (![self _validateJSON:JSONDict withSchemaDict:schemaDependency]) {
                                 return FALSE;
                             }
                         } else if ([dependency isKindOfClass:[NSArray class]]) {
