@@ -88,7 +88,7 @@
 //    
 //}
 
--(id)validatedJSONInstance:(id)json forSchema:(NSDictionary*)schema;
+-(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 {
     NSError * error;
     if (![NSJSONSerialization isValidJSONObject:json]) {
@@ -109,21 +109,21 @@
     if (error != nil) {
         return nil;
     }
-    return [self validatedJSONData:jsonData forSchemaData:schemaData];
+    return [self validateJSONData:jsonData withSchemaData:schemaData];
 }
 
--(id)validatedJSONData:(NSData*)jsonData forSchemaData:(NSData*)schemaData
+-(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData
 {
     NSError * error;
-    id json = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingAllowFragments|NSJSONReadingMutableContainers|NSJSONReadingMutableLeaves error:&error];
+    id json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
     if (error != nil) {
         return nil;
     }
-    id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:NSJSONReadingMutableContainers|NSJSONReadingMutableLeaves error:&error];
+    id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
     if (error != nil) {
         return nil;
     }
-    if (![schema isKindOfClass:[NSMutableDictionary class]]) {
+    if (![schema isKindOfClass:[NSDictionary class]]) {
         return nil;
     }
     if ([self validateJSON:json withSchemaDict:schema]) {
@@ -133,7 +133,7 @@
 }
 
 
--(BOOL)validateJSON:(id)json withSchemaDict:(NSMutableDictionary *)schema
+-(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
     //need to make sure the validation of schema doesn't infinitely recurse (self references)
     // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
@@ -187,11 +187,11 @@
     
     /* Defaults */
     //the strategy for defaults is to dive one deeper and replace *just* ahead of where we are
-    for (NSString * keyword in allKeywords) {
-        if ([schema[keyword] isKindOfClass:[NSDictionary class]] && schema[keyword][@"default"] != nil && [json isKindOfClass:[NSDictionary class]] && [json objectForKey:keyword] == nil) {//this only does shallow defaults replacement
-            [json setObject:[schema[keyword][@"default"] mutableCopy] forKey:keyword];
-        }
-    }
+//    for (NSString * keyword in allKeywords) {
+//        if ([schema[keyword] isKindOfClass:[NSDictionary class]] && schema[keyword][@"default"] != nil && [json isKindOfClass:[NSDictionary class]] && [json objectForKey:keyword] == nil) {//this only does shallow defaults replacement
+//            [json setObject:[schema[keyword][@"default"] mutableCopy] forKey:keyword];
+//        }
+//    }
     
     NSString * type;
     SEL typeValidator = nil;
@@ -241,7 +241,7 @@
                 }
             } else if ([keyword isEqualToString:@"anyOf"]) {
                 for (NSDictionary * subSchema in schema[keyword]) {
-                    if ([self _validateJSON:json withSchemaDict:subSchema]) { goto anyOfSuccess; } //yeah I did... yea. I. did. (in all seriousness, this needs splitting out into a new function, so that it can do the equivalen and 'return TRUE'.)
+                    if ([self _validateJSON:json withSchemaDict:subSchema]) { goto anyOfSuccess; } //yeah I did... yea. I. did. (in all seriousness, this needs splitting out into a new function, so that it can do the equivalent and 'return TRUE'.)
                 }
                 return FALSE;
                 anyOfSuccess: {}
@@ -351,9 +351,9 @@
     static NSArray * objectKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        objectKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties",/* @"patternProperties", @"additionalProperties",*/ @"dependencies"];
+        objectKeywords = @[@"maxProperties", @"minProperties", @"required", @"properties", @"patternProperties", @"additionalProperties", @"dependencies"];
     });
-    
+    BOOL doneProperties = FALSE;
     for (NSString * keyword in objectKeywords) {
         if (schema[keyword] != nil) {
             if ([keyword isEqualToString:@"maxProperties"]) {
@@ -370,11 +370,18 @@
                         return FALSE; //required not present. invalid JSON dict.
                     }
                 }
-            } else if ([keyword isEqualToString:@"properties"]) {
+            } else if (!doneProperties && ([keyword isEqualToString:@"properties"] || [keyword isEqualToString:@"patternProperties"] || [keyword isEqualToString:@"additionalProperties"])) {
+                doneProperties = TRUE;
+                id properties = schema[@"properties"];
+                id patternProperties = schema[@"patternProperties"];
+                id additionalProperties = schema[@"additionalProperties"];
+                if (properties == nil) { properties = [NSDictionary new]; }
+                if (patternProperties == nil) { patternProperties = [NSDictionary new]; }
+                if (additionalProperties == nil) { additionalProperties = [NSDictionary new]; }
                 /** calculating children schemas **/
                 //The calculation of the children schemas is combined with the checking of present keys
-                NSSet * p = [NSSet setWithArray:[schema[@"properties"] allKeys]];
-                NSArray * pp = [schema[@"patternProperties"] allKeys];
+                NSSet * p = [NSSet setWithArray:[properties allKeys]];
+                NSArray * pp = [patternProperties allKeys];
                 NSSet * allKeys = [NSSet setWithArray:[JSONDict allKeys]];
                 NSMutableDictionary * testSchemas = [NSMutableDictionary dictionaryWithCapacity:allKeys.count];
                 
@@ -382,7 +389,7 @@
                 //If set "p" contains value "m", then the corresponding schema in "properties" is added to "s".
                 [ps intersectSet:p];
                 for (id m in ps) {
-                    testSchemas[m] = [NSMutableArray arrayWithObject:[schema[@"properties"] objectForKey:m]];
+                    testSchemas[m] = [NSMutableArray arrayWithObject:[properties objectForKey:m]];
                 }
                 
                 //we loop the regexes so each is only created once
@@ -398,9 +405,9 @@
                     for (NSString * m in allKeys) {
                         if (!NSEqualRanges([regex rangeOfFirstMatchInString:m options:0 range:NSMakeRange(0, m.length)], NSMakeRange(NSNotFound, 0))) {
                             if (testSchemas[m] == NULL) {
-                                testSchemas[m] = [NSMutableArray arrayWithObject:[schema[@"patternProperties"] objectForKey:regexString]];
+                                testSchemas[m] = [NSMutableArray arrayWithObject:[patternProperties objectForKey:regexString]];
                             } else {
-                                [testSchemas[m] addObject:[schema[@"patternProperties"] objectForKey:regexString]];
+                                [testSchemas[m] addObject:[patternProperties objectForKey:regexString]];
                             }
                         }
                     }
@@ -410,7 +417,7 @@
                 //Successful validation of an object instance against these three keywords depends on the value of "additionalProperties":
                 //    if its value is boolean true or a schema, validation succeeds;
                 //    if its value is boolean false, the algorithm to determine validation success is described below.
-                if (!schema[@"additionalProperties"]) { //value must therefore be boolean false
+                if (!additionalProperties) { //value must therefore be boolean false
                     //Because we have built a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
                     //Validation of the instance succeeds if, after these two steps, set "s" is empty.
                     if (testSchemas.count < allKeys.count) {
@@ -420,10 +427,10 @@
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
                     NSDictionary * additionalPropsSchema;
                     //In addition, boolean value true for "additionalItems" is considered equivalent to an empty schema.
-                    if ([schema[@"additionalProperties"] isKindOfClass:[NSNumber class]]) { //TODO: better check for bool?
+                    if ([additionalProperties isKindOfClass:[NSNumber class]]) { //TODO: better check for bool?
                         additionalPropsSchema = [NSDictionary new];
                     } else {
-                        additionalPropsSchema = schema[@"additionalProperties"];
+                        additionalPropsSchema = additionalProperties;
                     }
                     NSMutableSet * additionalKeys = [allKeys mutableCopy];
                     [additionalKeys minusSet:[testSchemas keysOfEntriesPassingTest:^BOOL(id key, id obj, BOOL *stop) { return YES; }]];
@@ -475,17 +482,22 @@
     static NSArray * arrayKeywords;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        arrayKeywords = @[@"additionalItems@",/* @"items",*/ @"maxItems", @"minItems", @"uniqueItems"];
+        arrayKeywords = @[@"additionalItems@", @"items", @"maxItems", @"minItems", @"uniqueItems"];
     });
     
+    BOOL doneItems = FALSE;
     for (NSString * keyword in arrayKeywords) {
         if (schema[keyword] != nil) {
-            if ([keyword isEqualToString:@"additionalItems"]) {
-                id additionalItems = schema[keyword];
+            if (!doneItems && ([keyword isEqualToString:@"additionalItems"] || [keyword isEqualToString:@"items"])) {
+                doneItems = TRUE;
+                id additionalItems = schema[@"additionalItems"];
+                id items = schema[@"items"];
+                if (additionalItems == nil) { additionalItems = [NSDictionary new];}
+                if (items == nil) { items = [NSDictionary new];}
                 if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == TRUE) { //TODO: better test for boolean?
                     additionalItems = [NSDictionary new];
                 }
-                id items = schema[@"items"];
+                
                 for (int index = 0; index < [JSONArray count]; index++) {
                     id child = JSONArray[index];
                     if ([items isKindOfClass:[NSDictionary class]]) {
