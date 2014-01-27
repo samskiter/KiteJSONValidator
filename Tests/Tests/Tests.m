@@ -49,7 +49,7 @@
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
-                if ([json[@"description"] isEqualToString:@"0 and false are unique"]) {
+                if ([json[@"description"] isEqualToString:@"valid definition schema"]) {
                     
                 }
                 BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];

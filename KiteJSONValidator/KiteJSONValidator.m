@@ -21,6 +21,7 @@
 
 @property (nonatomic,strong) NSMutableArray * validationStack;
 @property (nonatomic,strong) NSMutableArray * resolutionStack;
+@property (nonatomic,strong) NSMutableArray * schemaStack;
 
 @end
 
@@ -83,47 +84,56 @@
     if (self.validationStack == nil) {
         self.validationStack = [NSMutableArray new];
         self.resolutionStack = [NSMutableArray new];
+        self.schemaStack = [NSMutableArray new];
     }
     Pair * pair = [Pair pairWithLeft:json right:schema];
-    if ([self.validationStack containsObject:pair]) { return FALSE; }
+    if ([self.validationStack containsObject:pair]) {
+        return FALSE; //Detects loops
+    }
     NSURL * lastResolution = self.resolutionStack.lastObject;
     if (lastResolution == nil) { lastResolution = [NSURL URLWithString:@""]; }
     [self.validationStack addObject:pair];
-    [self.resolutionStack addObject:lastResolution];
     return TRUE;
 }
 
 -(void)popStack
 {
+//    NSDictionary * schema = (NSDictionary*)[(Pair*)self.validationStack.lastObject right];
+//    if ([self.schemaStack.lastObject isEqual:schema]) {
+//        [self.schemaStack removeLastObject];
+//        [self.resolutionStack removeLastObject];
+//    }
     [self.validationStack removeLastObject];
-    [self.resolutionStack removeLastObject];
 }
 
 -(NSURL*)urlWithoutFragment:(NSURL*)url
 {
     NSString * refString = url.absoluteString;
-    return [NSURL URLWithString:[refString stringByReplacingOccurrencesOfString:url.fragment
-                                                                     withString:@""
-                                                                        options:NSBackwardsSearch
-                                                                          range:NSMakeRange(0, refString.length)]];
+    if (url.fragment.length > 0) {
+        refString = [refString stringByReplacingOccurrencesOfString:url.fragment
+                                                         withString:@""
+                                                            options:NSBackwardsSearch
+                                                              range:NSMakeRange(0, refString.length)];
+    }
+    return [NSURL URLWithString:refString];
 }
 
 -(NSDictionary *)getSchemaForReferenceString:(NSString*)refString
 {
     NSURL * refURI = [NSURL URLWithString:refString relativeToURL:self.resolutionStack.lastObject];
-    //remove the fragment, if it is a JSON-Pointer
+    //get the fragment, if it is a JSON-Pointer
     NSArray * pointerComponents;
-    if (refURI.fragment && [refURI.fragment hasPrefix:@"/"]) {
+    if (refURI.fragment.length > 0 && [refURI.fragment hasPrefix:@"/"]) {
         NSURL * pointerURI = [NSURL URLWithString:refURI.fragment];
         pointerComponents = [pointerURI pathComponents];
-        refURI = [self urlWithoutFragment:refURI];
     }
-    
+    refURI = [self urlWithoutFragment:refURI];
+        
     //first get the document, then resolve any pointers.
-    NSURL * lastResolution = self.validationStack.lastObject;
+    NSURL * lastResolution = self.resolutionStack.lastObject;
     NSDictionary * schema;
     if ([lastResolution isEqual:refURI]) {
-        schema = (NSDictionary*)[self.validationStack.lastObject right];
+        schema = (NSDictionary*)self.schemaStack.lastObject;
     } else {
         return nil;
     }
@@ -139,12 +149,23 @@
     return schema;
 }
 
--(void)setResolution:(NSString *)resolution
+-(BOOL)setResolution:(NSString *)resolution forSchema:(NSDictionary *)schema
 {
+    //res and schema as Pair only add if different to previous. pop smart. pre fill. leave ability to look up res anywhere.
     //we should warn if the resolution contains a JSON-Pointer (these are a bad idea in an ID)
     NSURL * idURI = [self urlWithoutFragment:[NSURL URLWithString:resolution relativeToURL:self.resolutionStack.lastObject]];
+    if (![self.resolutionStack.lastObject isEqual:idURI]) {
+        [self.resolutionStack addObject:idURI];
+        [self.schemaStack addObject:schema];
+        return TRUE;
+    }
+    return FALSE;
+}
+
+-(void)removeResolution
+{
     [self.resolutionStack removeLastObject];
-    [self.resolutionStack addObject:idURI];
+    [self.schemaStack removeLastObject];
 }
 
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
@@ -198,6 +219,10 @@
     //first validate the schema against the root schema then validate against the original
     //first check valid json (use NSJSONSerialization)
     
+    self.validationStack = [NSMutableArray new];
+    self.resolutionStack = [NSMutableArray new];
+    self.schemaStack = [NSMutableArray new];
+    
     if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
         return FALSE; //error: invalid schema
     }
@@ -212,11 +237,19 @@
     assert(schema != nil);
     //check stack for JSON and schema
     //push to stack the json and the schema.
-    [self pushToStackJSON:json forSchema:schema];
-    BOOL result = [self __validateJSON:json withSchemaDict:schema];
-    //pop from the stack
-    [self popStack];
-    return result;
+    if (![self pushToStackJSON:json forSchema:schema]) {
+        return FALSE;
+    } else {
+        BOOL newResolution = FALSE;
+        if (schema[@"id"] != nil) {
+            newResolution = [self setResolution:schema[@"id"] forSchema:schema];
+        }
+        BOOL result = [self __validateJSON:json withSchemaDict:schema];
+        //pop from the stacks
+        if (newResolution) { [self removeResolution]; }
+        [self popStack];
+        return result;
+    }
 }
 
 -(BOOL)__validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
@@ -250,7 +283,6 @@
 //        }
 //    }
     
-    
     NSString * type;
     SEL typeValidator = nil;
     if ([json isKindOfClass:[NSArray class]]) {
@@ -269,14 +301,14 @@
                 type = @"number";
             }
         }
-    }else if ([json isKindOfClass:[NSNull class]]) {
+    } else if ([json isKindOfClass:[NSNull class]]) {
         type = @"null";
     } else if ([json isKindOfClass:[NSDictionary class]]) {
         type = @"object";
         typeValidator = @selector(_validateJSONObject:withSchemaDict:);
-        if (json[@"$ref"] != nil) {
-            if (![json[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
-            NSDictionary * refSchema = [self getSchemaForReferenceString:json[@"ref"]];
+        if (schema[@"$ref"] != nil) {
+            if (![schema[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
+            NSDictionary * refSchema = [self getSchemaForReferenceString:schema[@"$ref"]];
             if (refSchema == nil) { return FALSE; } //couldn't find ref
             return [self _validateJSON:json withSchemaDict:refSchema];
         }
@@ -295,6 +327,7 @@
                 if (![schema[keyword] containsObject:json]) { return FALSE; }
             } else if ([keyword isEqualToString:@"type"]) {
                 if ([schema[keyword] isKindOfClass:[NSString class]]) {
+                    if ([type isEqualToString:@"integer"] && [schema[keyword] isEqualToString:@"number"]) { continue; }
                     if (![schema[keyword] isEqualToString:type]) { return FALSE; }
                 } else { //array
                     if (![schema[keyword] containsObject:type]) { return FALSE; }
@@ -448,9 +481,7 @@
                 id additionalProperties = schema[@"additionalProperties"];
                 if (properties == nil) { properties = [NSDictionary new]; }
                 if (patternProperties == nil) { patternProperties = [NSDictionary new]; }
-                if (additionalProperties == nil) {
-                    additionalProperties = [NSDictionary new]; }
-                if ([additionalProperties isKindOfClass:[NSNumber class]] && strcmp([additionalProperties objCType], @encode(char)) == 0 && [additionalProperties boolValue] == TRUE) {
+                if (additionalProperties == nil || ([additionalProperties isKindOfClass:[NSNumber class]] && strcmp([additionalProperties objCType], @encode(char)) == 0 && [additionalProperties boolValue] == TRUE)) {
                     additionalProperties = [NSDictionary new];
                 }
                 
@@ -609,7 +640,31 @@
                 if ([schema[keyword] isKindOfClass:[NSNumber class]] && [schema[keyword] boolValue] == TRUE) {
                     //If it has boolean value true, the instance validates successfully if all of its elements are unique.
                     NSSet * items = [NSSet setWithArray:JSONArray];
-                    if ([items count] < [JSONArray count]) { return FALSE; }
+                    BOOL falseFound;
+                    BOOL zeroFound;
+                    BOOL trueFound;
+                    BOOL oneFound;
+                    for (id item in JSONArray) {
+                        if ([item isKindOfClass:[NSNumber class]]) {
+                            if (strcmp([item objCType], @encode(char)) == 0) {
+                                if ([schema[keyword] boolValue] == TRUE) {
+                                    trueFound = TRUE;
+                                } else {
+                                    falseFound = FALSE;
+                                }
+                            } else {
+                                if ([item doubleValue] == 1.0) {
+                                    oneFound = TRUE;
+                                } else if ([item doubleValue] == 0.0) {
+                                    zeroFound = TRUE;
+                                }
+                            }
+                        }
+                    }
+                    int fudgeFactor = 0;
+                    if (oneFound && trueFound) { fudgeFactor++; }
+                    if (zeroFound && falseFound) { fudgeFactor++; }
+                    if ([items count] + fudgeFactor < [JSONArray count]) { return FALSE; }
                 }
             }
         }
