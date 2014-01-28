@@ -8,7 +8,11 @@
 
 #import <Foundation/Foundation.h>
 
+@protocol KiteJSONSchemaRefDelegate;
+
 @interface KiteJSONValidator : NSObject
+
+@property (nonatomic, weak) id<KiteJSONSchemaRefDelegate> delegate;
 
 /**
  Validates json against a draft4 schema.
@@ -20,5 +24,15 @@
  */
 -(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
+
+-(void)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url;
+-(void)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url;
+
+@end
+
+@protocol KiteJSONSchemaRefDelegate <NSObject>
+
+-(NSData*)schemaValidator:(KiteJSONValidator*)validator requiresSchemaDataForRefURL:(NSURL*)refURL;
+-(NSDictionary*)schemaValidator:(KiteJSONValidator*)validator requiresSchemaForRefURL:(NSURL*)refURL;
 
 @end

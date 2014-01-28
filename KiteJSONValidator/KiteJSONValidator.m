@@ -22,11 +22,37 @@
 @property (nonatomic,strong) NSMutableArray * validationStack;
 @property (nonatomic,strong) NSMutableArray * resolutionStack;
 @property (nonatomic,strong) NSMutableArray * schemaStack;
+@property (nonatomic,strong) NSMutableDictionary * schemaRefs;
 
 @end
 
 @implementation KiteJSONValidator
 
+-(void)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url
+{
+    NSError * error;
+    NSData * schemaData = [NSJSONSerialization dataWithJSONObject:schema options:0 error:&error];
+    if (error != nil) {
+        return;
+    }
+    [self addRefSchemaData:schemaData atURL:url];
+}
+
+-(void)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
+{
+    url = [self urlWithoutFragment:url];
+    if (self.schemaRefs == nil) {
+        self.schemaRefs = [NSMutableDictionary new];
+    }
+    NSError * error;
+    id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
+    if (error != nil) {
+        return;
+    } else if (![schema isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+    self.schemaRefs[url] = schema;
+}
 
 +(BOOL)propertyIsInteger:(id)property
 {
@@ -53,32 +79,6 @@
     return rootSchema;
 }
 
-//-(void)pushScopeWithId:(NSURL*)idURI forSchema:(NSDictionary*)schema
-//{
-//    //relativePath NOT relative string for everything after the host. relativePath doesNOT include the fragment)
-//    //if the scope is complete (see link) then it goes in as is. If it begins with # then it is a json-pointer fragment and should be appended. (does it replace any existing fragment?)
-//    //http://stackoverflow.com/questions/1471201/how-to-validate-an-url-on-the-iphone
-//    //http://stackoverflow.com/questions/5903157/ios-parse-a-url-into-segments
-//    KiteJSONValidatorScope * scope = [KiteJSONValidatorScope new];
-//    scope.schema = schema;
-//    if (self.scopeStack == nil) {
-//        self.scopeStack = [NSMutableArray new];
-//        scope.uri = idURI;
-//    }
-//    if (idURI && idURI.scheme && idURI.host) {
-//        // candidate is a well-formed url with:
-//        //  - a scheme (like http://)
-//        //  - a host (like stackoverflow.com)
-//        
-//    } else {
-//        //When an id is encountered, an implementation MUST resolve this id against the most immediate parent scope. The resolved URI will be the new resolution scope for this subschema and all its children, until another id is encountered.
-//        KiteJSONValidatorScope * parentScope = self.scopeStack.lastObject;
-//        NSURL * parentURI = parentScope.uri;
-////        if (uri.path)
-//    }
-//    [self.scopeStack addObject:schema];
-//}
-
 -(BOOL)pushToStackJSON:(id)json forSchema:(NSDictionary*)schema
 {
     if (self.validationStack == nil) {
@@ -98,11 +98,6 @@
 
 -(void)popStack
 {
-//    NSDictionary * schema = (NSDictionary*)[(Pair*)self.validationStack.lastObject right];
-//    if ([self.schemaStack.lastObject isEqual:schema]) {
-//        [self.schemaStack removeLastObject];
-//        [self.resolutionStack removeLastObject];
-//    }
     [self.validationStack removeLastObject];
 }
 
@@ -134,6 +129,8 @@
     NSDictionary * schema;
     if ([lastResolution isEqual:refURI]) {
         schema = (NSDictionary*)self.schemaStack.lastObject;
+    } else if (self.schemaRefs != nil && self.schemaRefs[refURI] != nil) {
+        schema = self.schemaRefs[refURI];
     } else {
         return nil;
     }
