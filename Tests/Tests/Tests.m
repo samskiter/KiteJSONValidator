@@ -49,8 +49,20 @@
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
-                if ([json[@"description"] isEqualToString:@"valid definition schema"]) {
+                if ([json[@"description"] isEqualToString:@"root pointer"]) {
                     
+                }
+                NSString * resourceRoot = [[NSBundle bundleForClass:[self class]] resourcePath];
+//                NSArray * refPaths = [[NSBundle bundleForClass:[self class]] pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/remotes"];
+                NSString * directory = [resourceRoot stringByAppendingPathComponent:@"JSON-Schema-Test-Suite/remotes"];
+                NSArray * refPaths = [self recursivePathsForResourcesOfType:@"json" inDirectory:directory];
+                for (NSString * path in refPaths)
+                {
+                    NSString * fullpath  = [directory stringByAppendingPathComponent:path];
+                    NSData * data = [NSData dataWithContentsOfFile:fullpath];
+                    NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
+                    url = [NSURL URLWithString:path relativeToURL:url];
+                    [validator addRefSchemaData:data atURL:url];
                 }
                 BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
                 BOOL desired = [json[@"valid"] boolValue];
@@ -60,6 +72,21 @@
             }
         }
     }
+}
+
+- (NSArray *)recursivePathsForResourcesOfType:(NSString *)type inDirectory:(NSString *)directoryPath {
+    NSMutableArray *filePaths = [[NSMutableArray alloc] init];
+    NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:directoryPath];
+    
+    NSString *filePath;
+    
+    while ((filePath = [enumerator nextObject]) != nil) {
+        if (!type || [[filePath pathExtension] isEqualToString:type]){
+            [filePaths addObject:filePath];
+        }
+    }
+    
+    return filePaths;
 }
 
 @end

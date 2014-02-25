@@ -28,6 +28,13 @@
 
 @implementation KiteJSONValidator
 
+-(id)init
+{
+    self = [super init];
+    [self addRefSchema:[self rootSchema] atURL:[NSURL URLWithString:@"http://json-schema.org/draft-04/schema#"]];
+    return self;
+}
+
 -(void)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url
 {
     NSError * error;
@@ -51,6 +58,7 @@
     } else if (![schema isKindOfClass:[NSDictionary class]]) {
         return;
     }
+    //todo: veryify the schema against the root
     self.schemaRefs[url] = schema;
 }
 
@@ -151,7 +159,7 @@
     //res and schema as Pair only add if different to previous. pop smart. pre fill. leave ability to look up res anywhere.
     //we should warn if the resolution contains a JSON-Pointer (these are a bad idea in an ID)
     NSURL * idURI = [self urlWithoutFragment:[NSURL URLWithString:resolution relativeToURL:self.resolutionStack.lastObject]];
-    if (![self.resolutionStack.lastObject isEqual:idURI]) {
+    if (!([self.resolutionStack.lastObject isEqual:idURI] && [self.schemaStack.lastObject isEqual:schema])) {
         [self.resolutionStack addObject:idURI];
         [self.schemaStack addObject:schema];
         return TRUE;
@@ -220,6 +228,8 @@
     self.resolutionStack = [NSMutableArray new];
     self.schemaStack = [NSMutableArray new];
     
+    [self setResolution:@"#" forSchema:schema];
+    
     if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
         return FALSE; //error: invalid schema
     }
@@ -280,6 +290,13 @@
 //        }
 //    }
     
+    if (schema[@"$ref"] != nil) {
+        if (![schema[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
+        NSDictionary * refSchema = [self getSchemaForReferenceString:schema[@"$ref"]];
+        if (refSchema == nil) { return FALSE; } //couldn't find ref
+        return [self _validateJSON:json withSchemaDict:refSchema];
+    }
+    
     NSString * type;
     SEL typeValidator = nil;
     if ([json isKindOfClass:[NSArray class]]) {
@@ -303,12 +320,7 @@
     } else if ([json isKindOfClass:[NSDictionary class]]) {
         type = @"object";
         typeValidator = @selector(_validateJSONObject:withSchemaDict:);
-        if (schema[@"$ref"] != nil) {
-            if (![schema[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
-            NSDictionary * refSchema = [self getSchemaForReferenceString:schema[@"$ref"]];
-            if (refSchema == nil) { return FALSE; } //couldn't find ref
-            return [self _validateJSON:json withSchemaDict:refSchema];
-        }
+        
     } else if ([json isKindOfClass:[NSString class]]) {
         type = @"string";
         typeValidator = @selector(_validateJSONString:withSchemaDict:);
@@ -570,7 +582,7 @@
                             NSArray * propertyDependency = dependency;
                             //For each (name, propertyset) pair of property dependencies, if the instance has a property by this name, then it must also have properties with the same names as propertyset.
                             NSSet * propertySet = [NSSet setWithArray:propertyDependency];
-                            if (![propertySet isSubsetOfSet:propertySet]) {
+                            if (![propertySet isSubsetOfSet:properties]) {
                                 return FALSE;
                             }
                         }
