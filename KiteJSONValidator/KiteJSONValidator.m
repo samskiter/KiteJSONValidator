@@ -139,7 +139,7 @@
     //first get the document, then resolve any pointers.
     NSURL * lastResolution = self.resolutionStack.lastObject;
     BOOL newDocument = NO;
-    NSDictionary * schema;
+    id schema;
     if ([lastResolution isEqual:refURI]) {
         schema = (NSDictionary*)self.schemaStack.lastObject;
     } else if (self.schemaRefs != nil && self.schemaRefs[refURI] != nil) {
@@ -151,9 +151,16 @@
         return NO;
     }
     for (NSString * component in pointerComponents) {
-        if (![component isEqualToString:@"/"]) {
-            if ([schema isKindOfClass:[NSDictionary class]] && schema[component] != nil) {
-                schema = schema[component];
+        if ((component != nil) && ![component isEqualToString:@"/"]) {
+            if ([schema isKindOfClass:[NSDictionary class]] && [schema objectForKey:component] != nil) {
+                schema = [schema objectForKey:component];
+            } else if ([schema isKindOfClass:[NSArray class]] && [schema objectAtIndex:[component integerValue]] != nil) {
+                NSNumberFormatter *f = [[NSNumberFormatter alloc] init];
+                [f setAllowsFloats:NO];
+                NSNumber * index = [f numberFromString:component];
+                if (index != nil) {
+                    schema = [schema objectAtIndex:[index intValue]];
+                }
             } else {
                 return NO;
             }
@@ -192,12 +199,13 @@
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 {
     NSError * error;
+    NSString * jsonKey = nil;
     if (![NSJSONSerialization isValidJSONObject:json]) {
 #ifdef DEBUG
         //in order to pass the tests
-        json = [NSDictionary dictionaryWithObject:json forKey:@"debugInvalidTopTypeKey"];
-        schema = [NSDictionary dictionaryWithObject:[NSDictionary dictionaryWithObject:schema forKey:@"debugInvalidTopTypeKey"]
-                                             forKey:@"properties"];
+        jsonKey = @"debugInvalidTopTypeKey";
+        json = @{jsonKey : json};
+//        schema = @{@"properties" : @{@"debugInvalidTopTypeKey" : schema}};
 #else
         return nil;
 #endif
@@ -210,15 +218,23 @@
     if (error != nil) {
         return nil;
     }
-    return [self validateJSONData:jsonData withSchemaData:schemaData];
+    return [self validateJSONData:jsonData withKey:jsonKey withSchemaData:schemaData];
 }
 
 -(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData
+{
+    return [self validateJSONData:jsonData withKey:nil withSchemaData:schemaData];
+}
+
+-(BOOL)validateJSONData:(NSData*)jsonData withKey:(NSString*)key withSchemaData:(NSData*)schemaData
 {
     NSError * error;
     id json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
     if (error != nil) {
         return FALSE;
+    }
+    if (key != nil) {
+        json = json[key];
     }
     id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
     if (error != nil) {
