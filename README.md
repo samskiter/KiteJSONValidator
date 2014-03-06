@@ -1,7 +1,7 @@
 KiteJSONValidator
 =================
 
-A native Objective-C JSON schema validator supporting [JSON Schema draft 4] [schemalink].
+A native Objective-C JSON schema validator supporting [JSON Schema draft 4] [schemalink] released under the MIT license.
 
 Notes: This implementation does not support inline dereferencing (see [section 7.2.3] [section723] of the JSON Schema Spec).
 
