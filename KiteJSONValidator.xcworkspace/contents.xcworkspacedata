@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <Group
+      location = "group:KiteJSONValidator"
+      name = "KiteJSONValidator">
+      <FileRef
+         location = "group:KiteJSONValidator.h">
+      </FileRef>
+      <FileRef
+         location = "group:KiteJSONValidator.m">
+      </FileRef>
+      <Group
+         location = "group:ReferenceSchemae"
+         name = "ReferenceSchemae">
+         <FileRef
+            location = "group:schema">
+         </FileRef>
+      </Group>
+   </Group>
+   <FileRef
+      location = "group:Tests/Tests.xcodeproj">
+   </FileRef>
+</Workspace>
