@@ -48,6 +48,7 @@
 -(void)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
 {
     url = [self urlWithoutFragment:url];
+    //TODO:consider failing if the url contained a fragment.
     if (self.schemaRefs == nil) {
         self.schemaRefs = [NSMutableDictionary new];
     }
@@ -118,10 +119,13 @@
                                                             options:NSBackwardsSearch
                                                               range:NSMakeRange(0, refString.length)];
     }
+    if ([refString hasSuffix:@"#"]) {
+        refString = [refString substringToIndex:[refString length] - 1];
+    }
     return [NSURL URLWithString:refString];
 }
 
--(NSDictionary *)getSchemaForReferenceString:(NSString*)refString
+-(BOOL)validateJSON:(id)json withSchemaAtReferenceString:(NSString*)refString
 {
     NSURL * refURI = [NSURL URLWithString:refString relativeToURL:self.resolutionStack.lastObject];
     //get the fragment, if it is a JSON-Pointer
@@ -134,31 +138,43 @@
         
     //first get the document, then resolve any pointers.
     NSURL * lastResolution = self.resolutionStack.lastObject;
+    BOOL newDocument = NO;
     NSDictionary * schema;
     if ([lastResolution isEqual:refURI]) {
         schema = (NSDictionary*)self.schemaStack.lastObject;
     } else if (self.schemaRefs != nil && self.schemaRefs[refURI] != nil) {
+        //we changed document
         schema = self.schemaRefs[refURI];
+        [self setResolutionUrl:refURI forSchema:schema];
+        newDocument = YES;
     } else {
-        return nil;
+        return NO;
     }
     for (NSString * component in pointerComponents) {
         if (![component isEqualToString:@"/"]) {
             if ([schema isKindOfClass:[NSDictionary class]] && schema[component] != nil) {
                 schema = schema[component];
             } else {
-                return nil;
+                return NO;
             }
         }
     }
-    return schema;
+    BOOL result = [self _validateJSON:json withSchemaDict:schema];
+    if (newDocument) {
+        [self removeResolution];
+    }
+    return result;
 }
 
--(BOOL)setResolution:(NSString *)resolution forSchema:(NSDictionary *)schema
+-(BOOL)setResolutionString:(NSString *)resolution forSchema:(NSDictionary *)schema
 {
     //res and schema as Pair only add if different to previous. pop smart. pre fill. leave ability to look up res anywhere.
     //we should warn if the resolution contains a JSON-Pointer (these are a bad idea in an ID)
     NSURL * idURI = [self urlWithoutFragment:[NSURL URLWithString:resolution relativeToURL:self.resolutionStack.lastObject]];
+    return [self setResolutionUrl:idURI forSchema:schema];
+}
+
+-(BOOL)setResolutionUrl:(NSURL *)idURI forSchema:(NSDictionary *)schema {
     if (!([self.resolutionStack.lastObject isEqual:idURI] && [self.schemaStack.lastObject isEqual:schema])) {
         [self.resolutionStack addObject:idURI];
         [self.schemaStack addObject:schema];
@@ -228,7 +244,7 @@
     self.resolutionStack = [NSMutableArray new];
     self.schemaStack = [NSMutableArray new];
     
-    [self setResolution:@"#" forSchema:schema];
+    [self setResolutionString:@"#" forSchema:schema];
     
     if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
         return FALSE; //error: invalid schema
@@ -236,6 +252,8 @@
     if (![self _validateJSON:json withSchemaDict:schema]) {
         return FALSE;
     }
+    
+    [self removeResolution];
     return TRUE;
 }
 
@@ -249,7 +267,7 @@
     } else {
         BOOL newResolution = FALSE;
         if (schema[@"id"] != nil) {
-            newResolution = [self setResolution:schema[@"id"] forSchema:schema];
+            newResolution = [self setResolutionString:schema[@"id"] forSchema:schema];
         }
         BOOL result = [self __validateJSON:json withSchemaDict:schema];
         //pop from the stacks
@@ -292,9 +310,7 @@
     
     if (schema[@"$ref"] != nil) {
         if (![schema[@"$ref"] isKindOfClass:[NSString class]]) { return FALSE; } //invalid reference (it should be a string)
-        NSDictionary * refSchema = [self getSchemaForReferenceString:schema[@"$ref"]];
-        if (refSchema == nil) { return FALSE; } //couldn't find ref
-        return [self _validateJSON:json withSchemaDict:refSchema];
+        return [self validateJSON:json withSchemaAtReferenceString:schema[@"$ref"]];
     }
     
     NSString * type;
