@@ -10,44 +10,47 @@
 
 @implementation KiteValidationPair
 
-@synthesize left, right;
-
-+ (id) pairWithLeft:(NSObject<NSCopying>*)l right:(NSObject<NSCopying>*)r {
++ (instancetype)pairWithLeft:(NSObject<NSCopying>*)l right:(NSObject<NSCopying>*)r {
     return [[[self class] alloc] initWithLeft:l right:r];
 }
 
-- (id) initWithLeft:(NSObject<NSCopying>*)l right:(NSObject<NSCopying>*)r {
+- (instancetype)initWithLeft:(NSObject<NSCopying>*)l right:(NSObject<NSCopying>*)r {
     if (self = [super init]) {
-        left = [l copy];
-        right = [r copy];
+        _left = [l copy];
+        _right = [r copy];
     }
     return self;
 }
 
-- (void) finalize {
-    left = nil;
-    right = nil;
-    [super finalize];
+- (id)copyWithZone:(NSZone *)zone {
+    return [[[self class] alloc] initWithLeft:[self left] right:[self right]];
 }
 
-- (void) dealloc {
-    left = nil;
-    right = nil;
+- (BOOL)isEqual:(id)obj
+{
+    if (![obj isKindOfClass:[KiteValidationPair class]])
+        return NO;
+
+    KiteValidationPair *other = (KiteValidationPair *)obj;
+    BOOL isLeftEqual = (_left == other->_left ||
+                        [_left isEqual:other->_left]);
+    BOOL isRightEqual = (_right == other->_right ||
+                         [_right isEqual:other->_right]);
+
+    return (isLeftEqual && isRightEqual);
 }
 
-- (id) copyWithZone:(NSZone *)zone {
-    KiteValidationPair * copy = [[[self class] alloc] initWithLeft:[self left] right:[self right]];
-    return copy;
+#define NSUINT_BIT (CHAR_BIT * sizeof(NSUInteger))
+#define NSUINTROTATE(val, howmuch) ((((NSUInteger)val) << howmuch) | (((NSUInteger)val) >> (NSUINT_BIT - howmuch)))
+
+- (NSUInteger)hash
+{
+    return NSUINTROTATE([_left hash], NSUINT_BIT / 2) ^ [_right hash];
 }
 
-- (BOOL) isEqual:(id)other {
-    if ([other isKindOfClass:[KiteValidationPair class]] == NO) { return NO; }
-    return ([[self left] isEqual:[other left]] && [[self right] isEqual:[other right]]);
-}
-
-- (NSUInteger) hash {
-    //perhaps not "hashish" enough, but probably good enough
-    return [[self left] hash] + [[self right] hash];
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"Left -> %@\nRight -> %@", _left, _right];
 }
 
 @end

@@ -11,7 +11,7 @@
 @interface KiteValidationPair : NSObject <NSCopying>
 @property (nonatomic, readonly) NSObject<NSCopying>* left;
 @property (nonatomic, readonly) NSObject<NSCopying>* right;
-+ (id) pairWithLeft:(id<NSCopying>)l right:(id<NSCopying>)r;
-- (id) initWithLeft:(id<NSCopying>)l right:(id<NSCopying>)r;
++ (instancetype) pairWithLeft:(id<NSCopying>)l right:(id<NSCopying>)r;
+- (instancetype) initWithLeft:(id<NSCopying>)l right:(id<NSCopying>)r;
 
 @end
