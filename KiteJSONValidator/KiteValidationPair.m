@@ -1,14 +1,14 @@
 //
-//  Pair.m
+//  KiteValidationPair.m
 //  Tests
 //
 //  Created by Sam Duke on 24/01/2014.
 //
 //
 
-#import "Pair.h"
+#import "KiteValidationPair.h"
 
-@implementation Pair
+@implementation KiteValidationPair
 
 @synthesize left, right;
 
@@ -36,12 +36,12 @@
 }
 
 - (id) copyWithZone:(NSZone *)zone {
-    Pair * copy = [[[self class] alloc] initWithLeft:[self left] right:[self right]];
+    KiteValidationPair * copy = [[[self class] alloc] initWithLeft:[self left] right:[self right]];
     return copy;
 }
 
 - (BOOL) isEqual:(id)other {
-    if ([other isKindOfClass:[Pair class]] == NO) { return NO; }
+    if ([other isKindOfClass:[KiteValidationPair class]] == NO) { return NO; }
     return ([[self left] isEqual:[other left]] && [[self right] isEqual:[other right]]);
 }
 

@@ -27,11 +27,6 @@
     [super tearDown];
 }
 
-- (void)testExample
-{
-//    XCTFail(@"No implementation for \"%s\"", __PRETTY_FUNCTION__);
-}
-
 - (void)testTestSuite
 {
     NSArray * paths = [[NSBundle bundleForClass:[self class]] pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/tests/draft4"];

@@ -7,15 +7,7 @@
 //
 
 #import "KiteJSONValidator.h"
-#import "Pair.h"
-
-@interface KiteJSONValidatorScope : NSObject
-@property (nonatomic,strong) NSURL * uri;
-@property (nonatomic,strong) NSDictionary * schema;
-@end
-
-@implementation KiteJSONValidatorScope
-@end
+#import "KiteValidationPair.h"
 
 @interface KiteJSONValidator()
 
@@ -95,12 +87,10 @@
         self.resolutionStack = [NSMutableArray new];
         self.schemaStack = [NSMutableArray new];
     }
-    Pair * pair = [Pair pairWithLeft:json right:schema];
+    KiteValidationPair * pair = [KiteValidationPair pairWithLeft:json right:schema];
     if ([self.validationStack containsObject:pair]) {
         return FALSE; //Detects loops
     }
-    NSURL * lastResolution = self.resolutionStack.lastObject;
-    if (lastResolution == nil) { lastResolution = [NSURL URLWithString:@""]; }
     [self.validationStack addObject:pair];
     return TRUE;
 }
@@ -207,16 +197,16 @@
         json = @{jsonKey : json};
 //        schema = @{@"properties" : @{@"debugInvalidTopTypeKey" : schema}};
 #else
-        return nil;
+        return FALSE;
 #endif
     }
     NSData * jsonData = [NSJSONSerialization dataWithJSONObject:json options:0 error:&error];
     if (error != nil) {
-        return nil;
+        return FALSE;
     }
     NSData * schemaData = [NSJSONSerialization dataWithJSONObject:schema options:0 error:&error];
     if (error != nil) {
-        return nil;
+        return FALSE;
     }
     return [self validateJSONData:jsonData withKey:jsonKey withSchemaData:schemaData];
 }
@@ -275,7 +265,7 @@
 
 -(BOOL)_validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
-    assert(schema != nil);
+    NSParameterAssert(schema != nil);
     //check stack for JSON and schema
     //push to stack the json and the schema.
     if (![self pushToStackJSON:json forSchema:schema]) {
@@ -681,6 +671,8 @@
                 if ([schema[keyword] isKindOfClass:[NSNumber class]] && [schema[keyword] boolValue] == TRUE) {
                     //If it has boolean value true, the instance validates successfully if all of its elements are unique.
                     NSSet * items = [NSSet setWithArray:JSONArray];
+
+                    //FIXME: uninitialized variables have garbage values, corrupting the fudgeFactor calculation.
                     BOOL falseFound;
                     BOOL zeroFound;
                     BOOL trueFound;
@@ -691,6 +683,7 @@
                                 if ([schema[keyword] boolValue] == TRUE) {
                                     trueFound = TRUE;
                                 } else {
+                                    //FIXME: won't execute due to line 673 but passes tests due to uninitialized var
                                     falseFound = FALSE;
                                 }
                             } else {
