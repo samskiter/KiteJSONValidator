@@ -185,23 +185,36 @@
         schema = self.schemaRefs[refURI];
         [self setResolutionUrl:refURI forSchema:schema];
         newDocument = YES;
-    } else {
+    }
+
+    if (!schema)
+    {
         return NO;
     }
+
     for (NSString * component in pointerComponents) {
-        if ((component != nil) && ![component isEqualToString:@"/"]) {
-            if ([schema isKindOfClass:[NSDictionary class]] && [schema objectForKey:component] != nil) {
-                schema = [schema objectForKey:component];
-            } else if ([schema isKindOfClass:[NSArray class]] && [schema objectAtIndex:[component integerValue]] != nil) {
-                NSNumberFormatter *f = [[NSNumberFormatter alloc] init];
-                [f setAllowsFloats:NO];
-                NSNumber * index = [f numberFromString:component];
-                if (index != nil) {
-                    schema = [schema objectAtIndex:[index intValue]];
-                }
-            } else {
-                return NO;
-            }
+        if ([component isEqualToString:@"/"])
+        {
+            continue;
+        }
+
+        if ([schema isKindOfClass:[NSDictionary class]])
+        {
+            schema = ((NSDictionary *)schema)[component];
+        }
+        else if ([schema isKindOfClass:[NSArray class]] &&
+                 [schema count] > [component integerValue])
+        {
+            schema = ((NSArray *)schema)[[component integerValue]];
+        }
+        else
+        {
+            schema = nil;
+        }
+
+        if (!schema)
+        {
+            return NO;
         }
     }
     BOOL result = [self _validateJSON:json withSchemaDict:schema];
