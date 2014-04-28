@@ -167,7 +167,7 @@
     }
 
     //get the fragment, if it is a JSON-Pointer
-    NSArray * pointerComponents;
+    NSArray * pointerComponents = nil;
     if (refURI.fragment.length > 0 && [refURI.fragment hasPrefix:@"/"]) {
         NSURL * pointerURI = [NSURL URLWithString:refURI.fragment];
         pointerComponents = [pointerURI pathComponents];
@@ -177,7 +177,8 @@
     //first get the document, then resolve any pointers.
     NSURL * lastResolution = self.resolutionStack.lastObject;
     BOOL newDocument = NO;
-    id schema;
+    id schema = nil;
+
     if ([lastResolution isEqual:refURI]) {
         schema = (NSDictionary*)self.schemaStack.lastObject;
     } else if (self.schemaRefs != nil && self.schemaRefs[refURI] != nil) {
@@ -252,7 +253,7 @@
 
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 {
-    NSError * error;
+    NSError * error = nil;
     NSString * jsonKey = nil;
     if (![NSJSONSerialization isValidJSONObject:json]) {
 #ifdef DEBUG
@@ -282,7 +283,7 @@
 
 -(BOOL)validateJSONData:(NSData*)jsonData withKey:(NSString*)key withSchemaData:(NSData*)schemaData
 {
-    NSError * error;
+    NSError * error = nil;
     id json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
     if (error != nil) {
         return NO;
@@ -397,8 +398,8 @@
         }
         return [self validateJSON:json withSchemaAtReference:schema[@"$ref"]];
     }
-    
-    NSString * type;
+
+    NSString *type = nil;
     SEL typeValidator = nil;
     if ([json isKindOfClass:[NSArray class]]) {
         type = @"array";
@@ -664,7 +665,7 @@
                     }
                 } else {
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
-                    NSDictionary * additionalPropsSchema;
+                    NSDictionary * additionalPropsSchema = nil;
                     //In addition, boolean value true for "additionalItems" is considered equivalent to an empty schema.
                     
                     if ([additionalProperties isKindOfClass:[NSNumber class]] && strcmp([additionalProperties objCType], @encode(char)) == 0) {
@@ -776,40 +777,80 @@
             } else if ([keyword isEqualToString:@"uniqueItems"]) {
                 if ([schemaItem isKindOfClass:[NSNumber class]] && [schemaItem boolValue] == YES) {
                     //If it has boolean value true, the instance validates successfully if all of its elements are unique.
-                    NSSet * items = [NSSet setWithArray:JSONArray];
+                    NSSet * uniqueItems = [NSSet setWithArray:jsonArray];
 
-                    //FIXME: uninitialized variables have garbage values, corrupting the fudgeFactor calculation.
-                    BOOL falseFound;
-                    BOOL zeroFound;
-                    BOOL trueFound;
-                    BOOL oneFound;
-                    for (id item in JSONArray) {
-                        if ([item isKindOfClass:[NSNumber class]]) {
-                            if (strcmp([item objCType], @encode(char)) == 0) {
-                                if ([schema[keyword] boolValue] == TRUE) {
-                                    trueFound = TRUE;
-                                } else {
-                                    //FIXME: won't execute due to line 673 but passes tests due to uninitialized var
-                                    falseFound = FALSE;
-                                }
-                            } else {
-                                if ([item doubleValue] == 1.0) {
-                                    oneFound = TRUE;
-                                } else if ([item doubleValue] == 0.0) {
-                                    zeroFound = TRUE;
-                                }
-                            }
-                        }
+                    NSUInteger fudgeFactor = 0;
+                    if ([self valuesHaveOneAndTrue:jsonArray])
+                    {
+                        fudgeFactor++;
                     }
-                    int fudgeFactor = 0;
-                    if (oneFound && trueFound) { fudgeFactor++; }
-                    if (zeroFound && falseFound) { fudgeFactor++; }
-                    if ([items count] + fudgeFactor < [JSONArray count]) { return FALSE; }
+
+                    // false and zero are treated as unique
+                    if ([self valuesHaveZeroAndFalse:jsonArray])
+                    {
+                        fudgeFactor++;
+                    }
+
+                    if (([uniqueItems count] + fudgeFactor) < [jsonArray count])
+                    {
+                        return NO;
+                    }
                 }
             }
         }
     }
-    return TRUE;
+    return YES;
+}
+
+- (BOOL)valuesHaveOneAndTrue:(NSArray *)values
+{
+    BOOL trueFound = NO;
+    BOOL oneFound = NO;
+
+    for (NSNumber *number in values)
+    {
+        if (![number isKindOfClass:[NSNumber class]])
+        {
+            continue;
+        }
+
+        if (strcmp([number objCType], @encode(char)) == 0)
+        {
+            if ([number boolValue] == YES)
+            {
+                trueFound = YES;
+            }
+        }
+        else if ([number doubleValue] == 1.0)
+        {
+            oneFound = YES;
+        }
+    }
+    return (trueFound && oneFound);
+}
+
+- (BOOL)valuesHaveZeroAndFalse:(NSArray *)values
+{
+    NSNumber *booleanNo = @NO;
+    NSNumber *integerZero = @(0);
+    NSNumber *firstZero = nil;
+    for (NSNumber *number in values)
+    {
+        if (![number isKindOfClass:[NSNumber class]])
+        {
+            continue;
+        }
+        if ([number isEqualToValue:booleanNo] ||
+            [number isEqualToValue:integerZero])
+        {
+            if (firstZero) {
+                return YES;
+            }
+            firstZero = number;
+            continue;
+        }
+    }
+    return NO;
 }
 
 -(BOOL)checkSchemaRef:(NSDictionary*)schema
