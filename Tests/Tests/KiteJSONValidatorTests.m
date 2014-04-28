@@ -27,7 +27,7 @@
     [super tearDown];
 }
 
-- (void)testTestSuite
+- (void)testDraft4Suite
 {
     NSArray * paths = [[NSBundle bundleForClass:[self class]] pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/tests/draft4"];
     for (NSString * path in paths) {
