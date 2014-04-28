@@ -27,38 +27,73 @@
     return self;
 }
 
--(void)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url
+-(BOOL)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url validateSchema:(BOOL)shouldValidateSchema
 {
     NSError * error;
+    //We convert to data in order to protect ourselves against a cyclic structure and ensure we have valid JSON
     NSData * schemaData = [NSJSONSerialization dataWithJSONObject:schema options:0 error:&error];
     if (error != nil) {
-        return;
+        return NO;
     }
-    [self addRefSchemaData:schemaData atURL:url];
+    return [self addRefSchemaData:schemaData atURL:url validateSchema:shouldValidateSchema];
 }
 
--(void)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
+-(BOOL)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url
 {
-    url = [self urlWithoutFragment:url];
-    //TODO:consider failing if the url contained a fragment.
-    if (self.schemaRefs == nil) {
-        self.schemaRefs = [NSMutableDictionary new];
+    return [self addRefSchema:schema atURL:url validateSchema:YES];
+}
+
+-(BOOL)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
+{
+    return [self addRefSchemaData:schemaData atURL:url validateSchema:YES];
+}
+
+-(BOOL)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema
+{
+    if (!schemaData || ![schemaData isKindOfClass:[NSData class]]) {
+        return NO;
     }
-    NSError * error;
+    
+    NSError * error = nil;
     id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
     if (error != nil) {
-        return;
+        return NO;
     } else if (![schema isKindOfClass:[NSDictionary class]]) {
-        return;
+        return NO;
     }
-    //todo: veryify the schema against the root
+    
+    NSAssert(url != NULL, @"URL must not be empty");
+    NSAssert(schema != NULL, @"Schema must not be empty");
+    
+    if (!url || !schema)
+    {
+        NSLog(@"Invalid schema for URL (%@): %@", url, schema);
+        return NO;
+    }
+    url = [self urlWithoutFragment:url];
+    //TODO:consider failing if the url contained a fragment.
+    
+    if (shouldValidateSchema)
+    {
+        NSDictionary *root = [self rootSchema];
+        if (![root isEqualToDictionary:schema])
+        {
+            BOOL isValidSchema = [self validateJSON:schema withSchemaDict:root];
+            NSAssert(isValidSchema == YES, @"Invalid schema");
+            if (!isValidSchema) return NO;
+        }
+        else
+        {
+            NSLog(@"Can't really validate the root schema against itself, right? ... Right?");
+        }
+    }
+    
+    if (!_schemaRefs)
+    {
+        _schemaRefs = [[NSMutableDictionary alloc] init];
+    }
     self.schemaRefs[url] = schema;
-}
-
-+(BOOL)propertyIsInteger:(id)property
-{
-    return [property isMemberOfClass:[NSNumber class]] &&
-           [property isEqualToNumber:[NSNumber numberWithInteger:[property integerValue]]];
+    return YES;
 }
 
 -(NSDictionary *)rootSchema
@@ -66,15 +101,17 @@
     static NSDictionary * rootSchema;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        NSString *rootSchemaPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"schema"
-                                                                                    ofType:@""];
-        //TODO: error out if the path is nil
+        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
+        NSString *rootSchemaPath = [bundle pathForResource:@"schema" ofType:@""];
+        NSAssert(rootSchemaPath != NULL, @"Root schema not found in bundle: %@", bundle.bundlePath);
+
         NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
         NSError *error = nil;
         rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
-                                                                    options:kNilOptions
-                                                                      error:&error];
-        NSLog(@"Root Schema: %@", rootSchema);
+                                                     options:kNilOptions
+                                                       error:&error];
+        NSAssert(rootSchema != NULL, @"Root schema wasn't found");
+        NSAssert([rootSchema isKindOfClass:[NSDictionary class]], @"Root schema wasn't a dictionary");
     });
     
     return rootSchema;
@@ -89,10 +126,10 @@
     }
     KiteValidationPair * pair = [KiteValidationPair pairWithLeft:json right:schema];
     if ([self.validationStack containsObject:pair]) {
-        return FALSE; //Detects loops
+        return NO; //Detects loops
     }
     [self.validationStack addObject:pair];
-    return TRUE;
+    return YES;
 }
 
 -(void)popStack
@@ -102,6 +139,10 @@
 
 -(NSURL*)urlWithoutFragment:(NSURL*)url
 {
+    if (!url || ![url isKindOfClass:[NSURL class]]) {
+        return nil;
+    }
+
     NSString * refString = url.absoluteString;
     if (url.fragment.length > 0) {
         refString = [refString stringByReplacingOccurrencesOfString:url.fragment
