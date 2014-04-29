@@ -10,14 +10,28 @@
             buildForTesting = "YES"
             buildForRunning = "YES"
             buildForProfiling = "YES"
-            buildForArchiving = "NO"
+            buildForArchiving = "YES"
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "67B6B119188C331200E1630A"
-               BuildableName = "Tests.xctest"
-               BlueprintName = "Tests"
-               ReferencedContainer = "container:Tests.xcodeproj">
+               BuildableName = "KiteJSONValidatorTests.xctest"
+               BlueprintName = "KiteJSONValidatorTests"
+               ReferencedContainer = "container:KiteJSONValidator.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "37C8BA18191058D1004D3E23"
+               BuildableName = "KiteJSONValidator.bundle"
+               BlueprintName = "KiteJSONResources"
+               ReferencedContainer = "container:KiteJSONValidator.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +47,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "67B6B119188C331200E1630A"
-               BuildableName = "Tests.xctest"
-               BlueprintName = "Tests"
-               ReferencedContainer = "container:Tests.xcodeproj">
+               BuildableName = "KiteJSONValidatorTests.xctest"
+               BlueprintName = "KiteJSONValidatorTests"
+               ReferencedContainer = "container:KiteJSONValidator.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>

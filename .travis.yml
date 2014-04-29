@@ -6,4 +6,4 @@ before_install:
     - brew uninstall xctool
     - brew install xctool
 script:
-    - xctool -workspace KiteJSONValidator.xcworkspace -scheme Tests -sdk iphonesimulator test ONLY_ACTIVE_ARCH=NO
+    - xctool -project KiteJSONValidator.xcodeproj -scheme KiteJSONValidatorTests -sdk iphonesimulator test ONLY_ACTIVE_ARCH=NO

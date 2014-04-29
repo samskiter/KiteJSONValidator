@@ -101,9 +101,11 @@
     static NSDictionary * rootSchema;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
-        NSString *rootSchemaPath = [bundle pathForResource:@"schema" ofType:@""];
-        NSAssert(rootSchemaPath != NULL, @"Root schema not found in bundle: %@", bundle.bundlePath);
+        NSBundle *mainBundle = [NSBundle bundleForClass:[self class]];
+        NSString *bundlePath = [mainBundle pathForResource:@"KiteJSONValidator" ofType:@"bundle"];
+        NSBundle *resourceBundle = [NSBundle bundleWithPath:bundlePath];
+        NSString *rootSchemaPath = [resourceBundle pathForResource:@"schema" ofType:@""];
+        NSAssert(rootSchemaPath != NULL, @"Root schema not found in bundle: %@", resourceBundle.bundlePath);
 
         NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
         NSError *error = nil;
