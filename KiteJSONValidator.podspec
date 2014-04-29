@@ -20,7 +20,8 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = "7.0"
 
   s.source       = { :git => "https://github.com/samskiter/KiteJSONValidator.git", :tag => '0.1' }
-  s.source_files  = "KiteJSONValidator/*.{h,m}"
+  s.source_files  = "Sources/*.{h,m}"
+  s.resource_bundles = { 'KiteJSONValidator' => ['Resources/ReferenceSchemae/*'] }
 
   s.requires_arc = true
 end
