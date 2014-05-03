@@ -461,11 +461,17 @@
                     if (![self _validateJSON:json withSchemaDict:subSchema]) { return NO; }
                 }
             } else if ([keyword isEqualToString:@"anyOf"]) {
+                BOOL anySuccess = NO;
                 for (NSDictionary * subSchema in schemaItem) {
-                    if ([self _validateJSON:json withSchemaDict:subSchema]) { goto anyOfSuccess; } //yeah I did... yea. I. did. (in all seriousness, this needs splitting out into a new function, so that it can do the equivalent and 'return YES'.)
+                    if ([self _validateJSON:json withSchemaDict:subSchema])
+                    {
+                        anySuccess = YES;
+                        break;
+                    }
                 }
-                return NO;
-                anyOfSuccess: {}
+                if (!anySuccess) {
+                    return NO;
+                }
             } else if ([keyword isEqualToString:@"oneOf"]) {
                 int passes = 0;
                 for (NSDictionary * subSchema in schemaItem) {
@@ -553,7 +559,7 @@
     dispatch_once(&onceToken, ^{
         stringKeywords = @[@"maxLength", @"minLength", @"pattern"];
     });
-    
+
     for (NSString * keyword in stringKeywords) {
         id schemaItem = schema[keyword];
         if (schemaItem != nil) {
