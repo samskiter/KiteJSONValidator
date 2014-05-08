@@ -6,7 +6,7 @@
 //
 //
 
-#import <Foundation/Foundation.h>
+@import Foundation;
 
 @interface KiteValidationPair : NSObject <NSCopying>
 @property (nonatomic, readonly) NSObject<NSCopying>* left;

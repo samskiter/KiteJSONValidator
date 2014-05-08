@@ -1,6 +1,5 @@
 Pod::Spec.new do |s|
   s.name         = "KiteJSONValidator"
-  s.version      = "0.1"
   s.summary      = "A native Objective-C JSON schema validator supporting JSON Schema draft 4"
   s.description  = <<-DESC
 					A native Objective-C JSON schema validator supporting [JSON Schema draft 4] [schemalink] released under the MIT license.
@@ -16,12 +15,10 @@ Pod::Spec.new do |s|
   s.homepage     = "https://github.com/samskiter/KiteJSONValidator"
   s.license      = "MIT"
   s.author       = { "Sam Duke" => "email.not.published@mailinator.com" }
-  s.platform     = :ios
-  s.ios.deployment_target = "7.0"
-
-  s.source       = { :git => "https://github.com/samskiter/KiteJSONValidator.git", :tag => '0.1' }
-  s.source_files  = "Sources/*.{h,m}"
-  s.resource_bundles = { 'KiteJSONValidator' => ['Resources/ReferenceSchemae/*'] }
-
+  s.version      = "0.1.1-Pod"
+  s.source       = { :git => "https://github.com/grgcombs/KiteJSONValidator.git", :tag => "v#{s.version}"}
+  s.platform     = :ios, '7.0'
   s.requires_arc = true
+  s.source_files = "Sources/*.{h,m}"
+  s.resource_bundles = { 'KiteJSONValidator' => ['Resources/ReferenceSchemae/*'] }
 end
