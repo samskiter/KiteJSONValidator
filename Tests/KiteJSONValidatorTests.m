@@ -27,14 +27,15 @@
     [super tearDown];
 }
 
-- (void)testExample
+- (void)testDraft4Suite
 {
-//    XCTFail(@"No implementation for \"%s\"", __PRETTY_FUNCTION__);
-}
+    NSBundle * mainBundle = [NSBundle bundleForClass:[self class]];
+    NSArray * paths = [mainBundle pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/tests/draft4"];
+    NSString * directory = [[mainBundle resourcePath] stringByAppendingPathComponent:@"JSON-Schema-Test-Suite/remotes"];
+    NSArray * refPaths = [self recursivePathsForResourcesOfType:@"json" inDirectory:directory];
 
-- (void)testTestSuite
-{
-    NSArray * paths = [[NSBundle bundleForClass:[self class]] pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/tests/draft4"];
+    unsigned int successes = 0;
+
     for (NSString * path in paths) {
         NSData *testData = [NSData dataWithContentsOfFile:path];
         NSError *error = nil;
@@ -45,40 +46,40 @@
             XCTFail(@"Failed to load test file: %@", path);
             continue;
         }
-        
+
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
-                if ([json[@"description"] isEqualToString:@"root pointer"]) {
-                    
-                }
-                NSString * resourceRoot = [[NSBundle bundleForClass:[self class]] resourcePath];
-//                NSArray * refPaths = [[NSBundle bundleForClass:[self class]] pathsForResourcesOfType:@"json" inDirectory:@"JSON-Schema-Test-Suite/remotes"];
-                NSString * directory = [resourceRoot stringByAppendingPathComponent:@"JSON-Schema-Test-Suite/remotes"];
-                NSArray * refPaths = [self recursivePathsForResourcesOfType:@"json" inDirectory:directory];
                 for (NSString * path in refPaths)
                 {
                     NSString * fullpath  = [directory stringByAppendingPathComponent:path];
                     NSData * data = [NSData dataWithContentsOfFile:fullpath];
                     NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
                     url = [NSURL URLWithString:path relativeToURL:url];
-                    [validator addRefSchemaData:data atURL:url];
+                    BOOL success = [validator addRefSchemaData:data atURL:url];
+                    XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
                 }
+                
                 BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
                 BOOL desired = [json[@"valid"] boolValue];
                 if (result != desired) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
                 }
+                else
+                {
+                    successes++;
+                }
             }
         }
     }
+
+    XCTAssertTrue(successes >= 251, @"Expected at least 251 test successes (as of draft v4), but found %ud", successes);
 }
 
 - (NSArray *)recursivePathsForResourcesOfType:(NSString *)type inDirectory:(NSString *)directoryPath {
     NSMutableArray *filePaths = [[NSMutableArray alloc] init];
     NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:directoryPath];
-    
-    NSString *filePath;
+    NSString *filePath = nil;
     
     while ((filePath = [enumerator nextObject]) != nil) {
         if (!type || [[filePath pathExtension] isEqualToString:type]){
