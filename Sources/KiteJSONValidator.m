@@ -27,7 +27,8 @@
     {
         NSURL *rootURL = [NSURL URLWithString:@"http://json-schema.org/draft-04/schema#"];
         NSDictionary *rootSchema = [self rootSchema];
-        [self addRefSchema:rootSchema atURL:rootURL validateSchema:NO];
+        BOOL success = [self addRefSchema:rootSchema atURL:rootURL validateSchema:NO];
+        NSAssert(success == YES, @"Unable to add the root schema!");
     }
 
     return self;
@@ -45,7 +46,7 @@
         !schema ||
         ![schema isKindOfClass:[NSDictionary class]])
     {
-        NSLog(@"Invalid schema for URL (%@): %@", url, schema);
+        //NSLog(@"Invalid schema for URL (%@): %@", url, schema);
         return NO;
     }
     url = [self urlWithoutFragment:url];
@@ -70,7 +71,7 @@
         }
         else
         {
-            NSLog(@"Can't really validate the root schema against itself, right? ... Right?");
+            //NSLog(@"Can't really validate the root schema against itself, right? ... Right?");
         }
     }
 
@@ -311,7 +312,7 @@
     if (!schema ||
         ![schema isKindOfClass:[NSDictionary class]])
     {
-        NSLog(@"No schema specified, or incorrect data type: %@", schema);
+        //NSLog(@"No schema specified, or incorrect data type: %@", schema);
         return NO;
     }
 
