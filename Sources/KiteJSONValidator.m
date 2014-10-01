@@ -840,26 +840,28 @@
 
 - (BOOL)valuesHaveZeroAndFalse:(NSArray *)values
 {
-    NSNumber *booleanNo = @NO;
-    NSNumber *integerZero = @(0);
-    NSNumber *firstZero = nil;
+    BOOL falseFound = NO;
+    BOOL zeroFound = NO;
+
     for (NSNumber *number in values)
     {
         if (![number isKindOfClass:[NSNumber class]])
         {
             continue;
         }
-        if ([number isEqualToValue:booleanNo] ||
-            [number isEqualToValue:integerZero])
+        if (strcmp([number objCType], @encode(char)) == 0)
         {
-            if (firstZero) {
-                return YES;
+            if ([number boolValue] == NO)
+            {
+                falseFound = YES;
             }
-            firstZero = number;
-            continue;
+        }
+        else if ([number doubleValue] == 0.0)
+        {
+            zeroFound = YES;
         }
     }
-    return NO;
+    return (falseFound && zeroFound);
 }
 
 -(BOOL)checkSchemaRef:(NSDictionary*)schema
