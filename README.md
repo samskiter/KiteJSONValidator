@@ -2,7 +2,8 @@ KiteJSONValidator
 =================
 
 Master: [![Build Status](https://travis-ci.org/samskiter/KiteJSONValidator.svg?branch=master)](https://travis-ci.org/samskiter/KiteJSONValidator)
-Develop:[![Build Status](https://travis-ci.org/samskiter/KiteJSONValidator.svg?branch=develop)](https://travis-ci.org/samskiter/KiteJSONValidator)
+
+Develop: [![Build Status](https://travis-ci.org/samskiter/KiteJSONValidator.svg?branch=develop)](https://travis-ci.org/samskiter/KiteJSONValidator)
 
 A native Objective-C JSON schema validator supporting [JSON Schema draft 4] [schemalink] released under the MIT license.
 
