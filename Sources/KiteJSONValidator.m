@@ -20,14 +20,24 @@
 
 @implementation KiteJSONValidator
 
+@synthesize validationStack=_validationStack;
+@synthesize resolutionStack=_resolutionStack;
+@synthesize schemaStack=_schemaStack;
+@synthesize schemaRefs=_schemaRefs;
+
+@synthesize delegate;
+
 -(id)init
 {
     self = [super init];
     if (self) {
         NSURL *rootURL = [NSURL URLWithString:@"http://json-schema.org/draft-04/schema#"];
         NSDictionary *rootSchema = [self rootSchema];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
         BOOL success = [self addRefSchema:rootSchema atURL:rootURL validateSchema:NO];
-        NSAssert(success == YES, @"Unable to add the root schema!");
+#pragma clang diagnostic pop
+        NSAssert(success == YES, @"Unable to add the root schema!", nil);
     }
 
     return self;
@@ -68,8 +78,8 @@
         return NO;
     }
     
-    NSAssert(url != NULL, @"URL must not be empty");
-    NSAssert(schema != NULL, @"Schema must not be empty");
+    NSAssert(url != NULL, @"URL must not be empty", nil);
+    NSAssert(schema != NULL, @"Schema must not be empty", nil);
     
     if (!url || !schema)
     {
@@ -85,7 +95,7 @@
         if (![root isEqualToDictionary:schema])
         {
             BOOL isValidSchema = [self validateJSON:schema withSchemaDict:root];
-            NSAssert(isValidSchema == YES, @"Invalid schema");
+            NSAssert(isValidSchema == YES, @"Invalid schema", nil);
             if (!isValidSchema) return NO;
         }
         else
@@ -118,8 +128,8 @@
         rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
                                                      options:kNilOptions
                                                        error:&error];
-        NSAssert(rootSchema != NULL, @"Root schema wasn't found");
-        NSAssert([rootSchema isKindOfClass:[NSDictionary class]], @"Root schema wasn't a dictionary");
+        NSAssert(rootSchema != NULL, @"Root schema wasn't found", nil);
+        NSAssert([rootSchema isKindOfClass:[NSDictionary class]], @"Root schema wasn't a dictionary", nil);
     });
     
     return rootSchema;
@@ -229,7 +239,7 @@
 {
     //res and schema as Pair only add if different to previous. pop smart. pre fill. leave ability to look up res anywhere.
     //we should warn if the resolution contains a JSON-Pointer (these are a bad idea in an ID)
-    NSURL *baseURL = (self.resolutionStack.lastObject) ?: [NSURL URLWithString:@""];
+    NSURL *baseURL = (self.resolutionStack.lastObject) ? (self.resolutionStack.lastObject) : [NSURL URLWithString:@""];
     NSURL *fullURL = [NSURL URLWithString:resolution relativeToURL:baseURL];
     NSURL *idURI = [self urlWithoutFragment:fullURL];
 
@@ -480,7 +490,7 @@
     
     if (typeValidator != nil) {
         IMP imp = [self methodForSelector:typeValidator];
-        BOOL (*func)(id, SEL, id, id) = (void *)imp;
+        BOOL (*func)(id, SEL, id, id) = (BOOL(*)(id, SEL, id, id))imp;
         if (!func(self, typeValidator, json, schema)) {
             return NO;
         }
@@ -615,8 +625,8 @@
                 }
             } else if (!doneProperties && ([keyword isEqualToString:@"properties"] || [keyword isEqualToString:@"patternProperties"] || [keyword isEqualToString:@"additionalProperties"])) {
                 doneProperties = YES;
-                id properties = schema[@"properties"];
-                id patternProperties = schema[@"patternProperties"];
+                NSDictionary * properties = schema[@"properties"];
+                NSDictionary * patternProperties = schema[@"patternProperties"];
                 id additionalProperties = schema[@"additionalProperties"];
                 if (properties == nil) { properties = [NSDictionary new]; }
                 if (patternProperties == nil) { patternProperties = [NSDictionary new]; }

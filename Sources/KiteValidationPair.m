@@ -10,6 +10,9 @@
 
 @implementation KiteValidationPair
 
+@synthesize left=_left;
+@synthesize right=_right;
+
 + (instancetype)pairWithLeft:(NSObject<NSCopying>*)l right:(NSObject<NSCopying>*)r {
     return [[[self class] alloc] initWithLeft:l right:r];
 }
@@ -22,9 +25,12 @@
     return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 - (id)copyWithZone:(NSZone *)zone {
     return [[[self class] alloc] initWithLeft:[self left] right:[self right]];
 }
+#pragma clang diagnostic pop
 
 - (BOOL)isEqual:(id)obj
 {
