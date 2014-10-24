@@ -556,10 +556,18 @@
 
             if ([keyword isEqualToString:@"maxLength"]) {
                 //A string instance is valid against this keyword if its length is less than, or equal to, the value of this keyword.
-                if (!(jsonString.length <= [schemaItem intValue])) { return NO; }
+                
+                //What's going on here - [NSString length] returns the number of unichars in a string. Unichars are 16bit but
+                // surrogate pairs in unicode require to Unichars. This is more common as this is how emoji are encoded.
+                // Go read this if you care: http://www.objc.io/issue-9/unicode.html (See Common Pitfalls - Length)
+                NSUInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
+                
+                if (!(realLength <= [schemaItem intValue])) { return NO; }
             } else if ([keyword isEqualToString:@"minLength"]) {
                 //A string instance is valid against this keyword if its length is greater than, or equal to, the value of this keyword.
-                if (!(jsonString.length >= [schemaItem intValue])) { return NO; }
+                
+                NSUInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
+                if (!(realLength >= [schemaItem intValue])) { return NO; }
             } else if ([keyword isEqualToString:@"pattern"]) {
                 //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
                 //This string SHOULD be a valid regular expression, according to the ECMA 262 regular expression dialect.
