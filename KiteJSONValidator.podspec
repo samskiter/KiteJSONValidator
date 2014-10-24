@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   s.homepage     = "https://github.com/samskiter/KiteJSONValidator"
   s.license      = "MIT"
   s.authors       = { "Sam Duke" => "samskiter@users.noreply.github.com" }
-  s.version      = "0.2"
+  s.version      = "0.2.1"
   s.source       = { :git => "https://github.com/samskiter/KiteJSONValidator.git", :tag => "v#{s.version}"}
   s.platform     = :ios, '7.0'
   s.requires_arc = true
