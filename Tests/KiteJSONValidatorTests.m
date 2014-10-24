@@ -50,12 +50,12 @@
         for (NSDictionary * test in tests) {
             for (NSDictionary * json in test[@"tests"]) {
                 KiteJSONValidator * validator = [KiteJSONValidator new];
-                for (NSString * path in refPaths)
+                for (NSString * refPath in refPaths)
                 {
-                    NSString * fullpath  = [directory stringByAppendingPathComponent:path];
+                    NSString * fullpath  = [directory stringByAppendingPathComponent:refPath];
                     NSData * data = [NSData dataWithContentsOfFile:fullpath];
                     NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
-                    url = [NSURL URLWithString:path relativeToURL:url];
+                    url = [NSURL URLWithString:refPath relativeToURL:url];
                     BOOL success = [validator addRefSchemaData:data atURL:url];
                     XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
                 }

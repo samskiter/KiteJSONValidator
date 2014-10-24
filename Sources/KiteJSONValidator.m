@@ -216,7 +216,7 @@
         if ([schema isKindOfClass:[NSDictionary class]]) {
             schema = ((NSDictionary *)schema)[component];
         } else if ([schema isKindOfClass:[NSArray class]] &&
-                 [schema count] > [component integerValue]) {
+                 (NSInteger)[(NSArray*)schema count] > [component integerValue]) {
             if (component.floatValue == (float)component.integerValue) {
                 schema = ((NSArray *)schema)[[component integerValue]];
             }
@@ -570,13 +570,13 @@
                 //What's going on here - [NSString length] returns the number of unichars in a string. Unichars are 16bit but
                 // surrogate pairs in unicode require to Unichars. This is more common as this is how emoji are encoded.
                 // Go read this if you care: http://www.objc.io/issue-9/unicode.html (See Common Pitfalls - Length)
-                NSUInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
+                NSInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
                 
-                if (!(realLength <= [schemaItem intValue])) { return NO; }
+                if (!(realLength <= [schemaItem integerValue])) { return NO; }
             } else if ([keyword isEqualToString:@"minLength"]) {
                 //A string instance is valid against this keyword if its length is greater than, or equal to, the value of this keyword.
                 
-                NSUInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
+                NSInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
                 if (!(realLength >= [schemaItem intValue])) { return NO; }
             } else if ([keyword isEqualToString:@"pattern"]) {
                 //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
@@ -611,10 +611,10 @@
 
             if ([keyword isEqualToString:@"maxProperties"]) {
                 //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
-                if ([jsonDict count] > [schemaItem intValue]) { return NO; /*invalid JSON dict*/ }
+                if ((NSInteger)[jsonDict count] > [schemaItem integerValue]) { return NO; /*invalid JSON dict*/ }
             } else if ([keyword isEqualToString:@"minProperties"]) {
                 //An object instance is valid against "minProperties" if its number of properties is greater than, or equal to, the value of this keyword.
-                if ([jsonDict count] < [schemaItem intValue]) { return NO; /*invalid JSON dict*/ }
+                if ((NSInteger)[jsonDict count] < [schemaItem integerValue]) { return NO; /*invalid JSON dict*/ }
             } else if ([keyword isEqualToString:@"required"]) {
                 NSArray * requiredArray = schemaItem;
                 for (NSObject * requiredProp in requiredArray) {
@@ -759,7 +759,7 @@
                     additionalItems = [NSDictionary new];
                 }
                 
-                for (int index = 0; index < [jsonArray count]; index++) {
+                for (NSUInteger index = 0; index < [jsonArray count]; index++) {
                     id child = jsonArray[index];
                     if ([items isKindOfClass:[NSDictionary class]]) {
                         //If items is a schema, then the child instance must be valid against this schema, regardless of its index, and regardless of the value of "additionalItems".
@@ -767,7 +767,7 @@
                             return NO;
                         }
                     } else if ([items isKindOfClass:[NSArray class]]) {
-                        if (index < [items count]) {
+                        if (index < [(NSArray *)items count]) {
                             if (![self _validateJSON:child withSchemaDict:items[index]]) {
                                 return NO;
                             }
@@ -785,10 +785,10 @@
                 }
             } else if ([keyword isEqualToString:@"maxItems"]) {
                 //An array instance is valid against "maxItems" if its size is less than, or equal to, the value of this keyword.
-                if ([jsonArray count] > [schemaItem intValue]) { return NO; }
+                if ((NSInteger)[jsonArray count] > [schemaItem integerValue]) { return NO; }
                 //An array instance is valid against "minItems" if its size is greater than, or equal to, the value of this keyword.
             } else if ([keyword isEqualToString:@"minItems"]) {
-                if ([jsonArray count] < [schemaItem intValue]) { return NO; }
+                if ((NSInteger)[jsonArray count] < [schemaItem integerValue]) { return NO; }
             } else if ([keyword isEqualToString:@"uniqueItems"]) {
                 if ([schemaItem isKindOfClass:[NSNumber class]] && [schemaItem boolValue] == YES) {
                     //If it has boolean value true, the instance validates successfully if all of its elements are unique.
