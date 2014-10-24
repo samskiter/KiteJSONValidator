@@ -18,8 +18,8 @@
  Validates json against a draft4 schema.
  @see http://tools.ietf.org/html/draft-zyp-json-schema-04
  
- @param json The JSON to be validated
- @param schema The draft4 JSON schema to validate against
+ @param jsonData The JSON to be validated
+ @param schemaData The draft4 JSON schema to validate against
  @return Whether the json is validated.
  */
 -(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
