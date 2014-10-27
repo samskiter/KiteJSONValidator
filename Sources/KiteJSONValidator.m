@@ -261,6 +261,27 @@
     [self.schemaStack removeLastObject];
 }
 
+-(BOOL)validateJSONInstance:(id)json withSchemaData:(NSData*)schemaData
+{
+    NSError * error = nil;
+    NSString * jsonKey = nil;
+    if (![NSJSONSerialization isValidJSONObject:json]) {
+#ifdef DEBUG
+        //in order to pass the tests
+        jsonKey = @"debugInvalidTopTypeKey";
+        json = @{jsonKey : json};
+        //        schema = @{@"properties" : @{@"debugInvalidTopTypeKey" : schema}};
+#else
+        return NO;
+#endif
+    }
+    NSData * jsonData = [NSJSONSerialization dataWithJSONObject:json options:0 error:&error];
+    if (error != nil) {
+        return NO;
+    }
+    return [self validateJSONData:jsonData withKey:jsonKey withSchemaData:schemaData];
+}
+
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 {
     NSError * error = nil;

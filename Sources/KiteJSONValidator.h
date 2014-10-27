@@ -24,6 +24,7 @@
  */
 -(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
+-(BOOL)validateJSONInstance:(id)json withSchemaData:(NSData*)schemaData;
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
