@@ -6,7 +6,7 @@
 //  Copyright (c) 2013 Airsource Ltd. All rights reserved.
 //
 
-@import Foundation;
+#import <Foundation/Foundation.h>
 
 @protocol KiteJSONSchemaRefDelegate;
 
