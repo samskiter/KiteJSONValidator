@@ -25,6 +25,7 @@
 -(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
 -(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 -(BOOL)validateJSONInstance:(id)json withSchemaData:(NSData*)schemaData;
+//TODO:add an interface to add a schema with a key, allowing a schema to only be validated once and then reused
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
