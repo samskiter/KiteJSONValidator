@@ -104,12 +104,15 @@
         }
     }
     
-    if (!_schemaRefs)
+    @synchronized(self)
     {
-        _schemaRefs = [[NSMutableDictionary alloc] init];
+        if (!_schemaRefs)
+        {
+            _schemaRefs = [[NSMutableDictionary alloc] init];
+        }
+        self.schemaRefs[url] = schema;
+        return YES;
     }
-    self.schemaRefs[url] = schema;
-    return YES;
 }
 
 -(NSDictionary *)rootSchema
@@ -337,32 +340,35 @@
 
 -(BOOL)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
-    if (!schema ||
-        ![schema isKindOfClass:[NSDictionary class]]) {
-        //NSLog(@"No schema specified, or incorrect data type: %@", schema);
-        return NO;
+    @synchronized(self)
+    {
+        if (!schema ||
+            ![schema isKindOfClass:[NSDictionary class]]) {
+            //NSLog(@"No schema specified, or incorrect data type: %@", schema);
+            return NO;
+        }
+
+        //need to make sure the validation of schema doesn't infinitely recurse (self references)
+        // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
+        //first validate the schema against the root schema then validate against the original
+        //first check valid json (use NSJSONSerialization)
+
+        self.validationStack = [NSMutableArray new];
+        self.resolutionStack = [NSMutableArray new];
+        self.schemaStack = [NSMutableArray new];
+
+        [self setResolutionString:@"#" forSchema:schema];
+        
+        if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
+            return NO; //error: invalid schema
+        }
+        if (![self _validateJSON:json withSchemaDict:schema]) {
+            return NO;
+        }
+
+        [self removeResolution];
+        return YES;
     }
-
-    //need to make sure the validation of schema doesn't infinitely recurse (self references)
-    // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
-    //first validate the schema against the root schema then validate against the original
-    //first check valid json (use NSJSONSerialization)
-
-    self.validationStack = [NSMutableArray new];
-    self.resolutionStack = [NSMutableArray new];
-    self.schemaStack = [NSMutableArray new];
-
-    [self setResolutionString:@"#" forSchema:schema];
-    
-    if (![self _validateJSON:schema withSchemaDict:self.rootSchema]) {
-        return NO; //error: invalid schema
-    }
-    if (![self _validateJSON:json withSchemaDict:schema]) {
-        return NO;
-    }
-
-    [self removeResolution];
-    return YES;
 }
 
 -(BOOL)_validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
