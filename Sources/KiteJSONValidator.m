@@ -18,7 +18,7 @@
 
 @end
 
-NSError* jsonError(NSString* format,...){
+NSError* ValidationError(NSString* format, ...){
 
     static NSString* KiteJSONValidatorDomain = @"KiteJSONValidator";
     
@@ -45,84 +45,72 @@ NSError* jsonError(NSString* format,...){
     if (self) {
         NSURL *rootURL = [NSURL URLWithString:@"http://json-schema.org/draft-04/schema#"];
         NSDictionary *rootSchema = [self rootSchema];
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-variable"
-        BOOL success = [self addRefSchema:rootSchema atURL:rootURL validateSchema:NO];
-#pragma clang diagnostic pop
-        NSAssert(success == YES, @"Unable to add the root schema!", nil);
+        NSAssert([self addRefSchema:rootSchema atURL:rootURL validateSchema:NO]==nil, @"Unable to add the root schema!", nil);
     }
 
     return self;
 }
 
--(BOOL)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url validateSchema:(BOOL)shouldValidateSchema
+-(NSError*)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url validateSchema:(BOOL)shouldValidateSchema
 {
     NSError * error;
     //We convert to data in order to protect ourselves against a cyclic structure and ensure we have valid JSON
     NSData * schemaData = [NSJSONSerialization dataWithJSONObject:schema options:0 error:&error];
-    if (error != nil) {
-        return NO;
+    if (error) {
+        return error;
     }
     return [self addRefSchemaData:schemaData atURL:url validateSchema:shouldValidateSchema];
 }
 
--(BOOL)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url
+-(NSError*)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url
 {
     return [self addRefSchema:schema atURL:url validateSchema:YES];
 }
 
--(BOOL)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
+-(NSError*)addRefSchemaData:(NSData *)schemaData atURL:(NSURL *)url
 {
     return [self addRefSchemaData:schemaData atURL:url validateSchema:YES];
 }
 
--(BOOL)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema
+-(NSError*)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema
 {
+    if (!url) return ValidationError(@"URL must not be empty");
+    
     if (!schemaData || ![schemaData isKindOfClass:[NSData class]]) {
-        return NO;
+        return ValidationError(@"Data must be NSData class. Not %@", schemaData.class);
     }
     
     NSError * error = nil;
     id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
-    if (error != nil) {
-        return NO;
+    if (error) {
+        return error;
     } else if (![schema isKindOfClass:[NSDictionary class]]) {
-        return NO;
+        return ValidationError(@"Schema must be an 'Object'. Not %@", [schema class]);
     }
     
-    NSAssert(url != NULL, @"URL must not be empty", nil);
-    NSAssert(schema != NULL, @"Schema must not be empty", nil);
+    if (!schema) return ValidationError(@"Schema must not be empty");
     
-    if (!url || !schema)
-    {
-        //NSLog(@"Invalid schema for URL (%@): %@", url, schema);
-        return NO;
-    }
     url = [self urlWithoutFragment:url];
     //TODO:consider failing if the url contained a fragment.
     
-    if (shouldValidateSchema)
-    {
+    if (shouldValidateSchema) {
         NSDictionary *root = [self rootSchema];
-        if (![root isEqualToDictionary:schema])
-        {
+        if (![root isEqualToDictionary:schema]) {
             NSError* schemaError = [self validateJSON:schema withSchemaDict:root];
-            NSAssert(!schemaError, @"Invalid schema", nil);
-            if (schemaError)
-                return NO;
+            if (schemaError) {
+                return ValidationError(@"Invalid schema %@", schemaError.localizedDescription);
+            }
         }
-        else
-        {
+        else {
             //NSLog(@"Can't really validate the root schema against itself, right? ... Right?");
         }
     }
     
-    if (!_schemaRefs)
-    {
+    if (!_schemaRefs) {
         _schemaRefs = [[NSMutableDictionary alloc] init];
     }
     self.schemaRefs[url] = schema;
-    return YES;
+    return nil;
 }
 
 -(NSDictionary *)rootSchema
@@ -157,7 +145,7 @@ NSError* jsonError(NSString* format,...){
     }
     KiteValidationPair * pair = [KiteValidationPair pairWithLeft:json right:schema];
     if ([self.validationStack containsObject:pair]) {
-        return jsonError(@"loops detectsed"); //Detects loops
+        return ValidationError(@"Loops detectsed"); //Detects loops
     }
     [self.validationStack addObject:pair];
     return nil;
@@ -191,7 +179,7 @@ NSError* jsonError(NSString* format,...){
 {
     NSURL * refURI = [NSURL URLWithString:refString relativeToURL:self.resolutionStack.lastObject];
     if (!refURI) {
-        return jsonError(@"No Ref URI");
+        return ValidationError(@"No Ref URI for '%@'", refString);
     }
 
     //get the fragment, if it is a JSON-Pointer
@@ -217,7 +205,7 @@ NSError* jsonError(NSString* format,...){
     }
 
     if (!schema) {
-        return jsonError(@"No schema for Ref URI");
+        return ValidationError(@"No schema for Ref URI: %@", refURI);
     }
 
     for (NSString * component in pointerComponents) {
@@ -237,7 +225,7 @@ NSError* jsonError(NSString* format,...){
         }
 
         if (!schema) {
-            return jsonError(@"No schema");
+            return ValidationError(@"No schema");
         }
     }
     NSError* error = [self _validateJSON:json withSchemaDict:schema];
@@ -284,7 +272,7 @@ NSError* jsonError(NSString* format,...){
         json = @{jsonKey : json};
 //        schema = @{@"properties" : @{@"debugInvalidTopTypeKey" : schema}};
 #else
-        return jsonError(@"is not valid JSON Object");
+        return ValidationError(@"is not valid JSON Object");
 #endif
     }
     NSData * jsonData = [NSJSONSerialization dataWithJSONObject:json options:0 error:&error];
@@ -308,28 +296,27 @@ NSError* jsonError(NSString* format,...){
     NSError * error = nil;
     id json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
     if (error) {
-        return error;
+        return ValidationError(@"JSON data must be valid JSON: @%", error.localizedDescription);
     }
     if (key != nil) {
         json = json[key];
     }
     id schema = [NSJSONSerialization JSONObjectWithData:schemaData options:0 error:&error];
     if (error) {
-        return error;
+        return ValidationError(@"Scheme must be valid JSON: %@", error.localizedDescription);
     }
     if (![schema isKindOfClass:[NSDictionary class]]) {
-        return jsonError(@"Schema must be 'Object' type");
+        return ValidationError(@"Schema must be 'Object' type. Not %@", [schema class]);
     }
     return [self validateJSON:json withSchemaDict:schema];
 }
 
 -(NSError*)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
-
     if (!schema ||
         ![schema isKindOfClass:[NSDictionary class]]) {
         //NSLog(@"No schema specified, or incorrect data type: %@", schema);
-        return jsonError(@"Schema must be 'Object' type");
+        return ValidationError(@"Schema must be 'Object' type. Not %@", [schema class]);
     }
     //need to make sure the validation of schema doesn't infinitely recurse (self references)
     // therefore should not expand any subschemas, and ensure schema are only checked on a 'top' level.
@@ -413,7 +400,7 @@ NSError* jsonError(NSString* format,...){
     NSString* schemaRef = schema[@"$ref"];
     if (schemaRef) {
         if (![schemaRef isKindOfClass:[NSString class]]) {
-            return jsonError(@"$ref '%@' is '%@' type, but must be a 'String' type", schemaRef, [schemaRef class]);
+            return ValidationError(@"$ref '%@' is '%@' type, but must be a 'String' type", schemaRef, [schemaRef class]);
         }
         return [self validateJSON:json withSchemaAtReference:schemaRef];
     }
@@ -446,7 +433,7 @@ NSError* jsonError(NSString* format,...){
         type = @"string";
         typeValidator = ^{ return [self _validateJSONString:json withSchemaDict:schema]; };
     } else {
-        return jsonError(@"The schema '%@' is not one of the valid types", [json class]); // the schema is not one of the valid types.
+        return ValidationError(@"The schema '%@' is not one of the valid types", [json class]); // the schema is not one of the valid types.
     }    
     
     //TODO: extract the types first before the check (if there is no type specified, we'll never hit the checking code
@@ -457,7 +444,7 @@ NSError* jsonError(NSString* format,...){
             if ([keyword isEqualToString:@"enum"]) {
                 //An instance validates successfully against this keyword if its value is equal to one of the elements in this keyword's array value.
                 if (![schemaItem containsObject:json]) {
-                    return jsonError(@"enum '%@' does not contain '%@'", schemaItem, json);
+                    return ValidationError(@"enum '%@' does not contain '%@'", schemaItem, json);
                 }
             } else if ([keyword isEqualToString:@"type"]) {
                 if ([schemaItem isKindOfClass:[NSString class]]) {
@@ -465,11 +452,11 @@ NSError* jsonError(NSString* format,...){
                         continue; 
                     }
                     if (![schemaItem isEqualToString:type]) {
-                        return jsonError(@"schema '%@' != '%@'", schemaItem, type);
+                        return ValidationError(@"schema '%@' != '%@'", schemaItem, type);
                     }
                 } else { //array
                     if (![schemaItem containsObject:type]) {
-                        return jsonError(@"array '%@' does not contain '%@'", schemaItem, type);
+                        return ValidationError(@"array '%@' does not contain '%@'", schemaItem, type);
                     }
                 }
             } else if ([keyword isEqualToString:@"allOf"]) {
@@ -486,7 +473,7 @@ NSError* jsonError(NSString* format,...){
                         return nil;
                     }
                 }
-                return jsonError(@"'%@' must be ANY OF '%@'", json, schemaItem);
+                return ValidationError(@"'%@' must be ANY OF '%@'", json, schemaItem);
             } else if ([keyword isEqualToString:@"oneOf"]) {
                 int passes = 0;
                 for (NSDictionary * subSchema in schemaItem) {
@@ -495,16 +482,16 @@ NSError* jsonError(NSString* format,...){
                         passes++;
                     }
                     if (passes > 1) {
-                        return jsonError(@"'%@' must be ONE OF '%@'", json, schemaItem);
+                        return ValidationError(@"'%@' must be ONE OF '%@'", json, schemaItem);
                     }
                 }
                 if (passes != 1) {
-                    return jsonError(@"'%@' must be ONE OF '%@'", json, schemaItem);
+                    return ValidationError(@"'%@' must be ONE OF '%@'", json, schemaItem);
                 }
             } else if ([keyword isEqualToString:@"not"]) {
                 NSError* error = [self _validateJSON:json withSchemaDict:schemaItem];
                 if (error == nil) {
-                    return jsonError(@"'%@' must be NOT '%@'", json, schemaItem);
+                    return ValidationError(@"'%@' must be NOT '%@'", json, schemaItem);
                 }
             } else if ([keyword isEqualToString:@"definitions"]) {
                 
@@ -529,10 +516,10 @@ NSError* jsonError(NSString* format,...){
     });
     
     if (!schema) {
-        return jsonError(@"no schema for '%@'", jsonNumber);
+        return ValidationError(@"no schema for '%@'", jsonNumber);
     }
     if (![schema isKindOfClass:[NSDictionary class]]) {
-        return jsonError(@"schema is not is object '%@'", schema);
+        return ValidationError(@"schema is not is object '%@'", schema);
     }
     
     for (NSString * keyword in numericKeywords) {
@@ -543,30 +530,30 @@ NSError* jsonError(NSString* format,...){
                 //A numeric instance is valid against "multipleOf" if the result of the division of the instance by this keyword's value is an integer.
                 double divResult = [jsonNumber doubleValue] / [schemaItem doubleValue];
                 if ((divResult - floor(divResult)) != 0.0) {
-                    return jsonError(@"multipleOf");
+                    return ValidationError(@"multipleOf");
                 }
             } else if ([keyword isEqualToString:@"maximum"]) {
                 if ([schema[@"exclusiveMaximum"] isKindOfClass:[NSNumber class]] && [schema[@"exclusiveMaximum"] boolValue] == YES) {
                     if (!([jsonNumber doubleValue] < [schemaItem doubleValue])) {
                         //if "exclusiveMaximum" has boolean value true, the instance is valid if it is strictly lower than the value of "maximum".
-                        return jsonError(@"'%@' must be lower than '%@'", jsonNumber, schemaItem);
+                        return ValidationError(@"'%@' must be lower than '%@'", jsonNumber, schemaItem);
                     }
                 } else {
                     if (!([jsonNumber doubleValue] <= [schemaItem doubleValue])) {
                         //if "exclusiveMaximum" is not present, or has boolean value false, then the instance is valid if it is lower than, or equal to, the value of "maximum"
-                        return jsonError(@"'%@' must be lower than, or equal to '%@'", jsonNumber, schemaItem);
+                        return ValidationError(@"'%@' must be lower than, or equal to '%@'", jsonNumber, schemaItem);
                     }
                 }
             } else if ([keyword isEqualToString:@"minimum"]) {
                 if ([schema[@"exclusiveMinimum"] isKindOfClass:[NSNumber class]] && [schema[@"exclusiveMinimum"] boolValue] == YES) {
                     if (!([jsonNumber doubleValue] > [schemaItem doubleValue])) {
                         //if "exclusiveMinimum" is present and has boolean value true, the instance is valid if it is strictly greater than the value of "minimum".
-                        return jsonError(@"'%@' must be greater than '%@'", jsonNumber, schemaItem);
+                        return ValidationError(@"'%@' must be greater than '%@'", jsonNumber, schemaItem);
                     }
                 } else {
                     if (!([jsonNumber doubleValue] >= [schemaItem doubleValue])) {
                         //if "exclusiveMinimum" is not present, or has boolean value false, then the instance is valid if it is greater than, or equal to, the value of "minimum"
-                        return jsonError(@"'%@' must be greater than, or equal to '%@'", jsonNumber, schemaItem);
+                        return ValidationError(@"'%@' must be greater than, or equal to '%@'", jsonNumber, schemaItem);
                     }
                 }
             }
@@ -596,14 +583,14 @@ NSError* jsonError(NSString* format,...){
                 NSInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
                 
                 if (!(realLength <= [schemaItem integerValue])) {
-                    return jsonError(@"string '%@' length must be less than, or equal to %d", jsonString, realLength);
+                    return ValidationError(@"string '%@' length must be less than, or equal to %d", jsonString, realLength);
                 }
             } else if ([keyword isEqualToString:@"minLength"]) {
                 //A string instance is valid against this keyword if its length is greater than, or equal to, the value of this keyword.
                 
                 NSInteger realLength = [jsonString lengthOfBytesUsingEncoding:NSUTF32StringEncoding] / 4;
                 if (!(realLength >= [schemaItem intValue])) {
-                    return jsonError(@"string '%@' length must be greater than, or equal to %d", jsonString, realLength);
+                    return ValidationError(@"string '%@' length must be greater than, or equal to %d", jsonString, realLength);
                 }
             } else if ([keyword isEqualToString:@"pattern"]) {
                 //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
@@ -616,7 +603,7 @@ NSError* jsonError(NSString* format,...){
                 }
                 if (NSEqualRanges([regex rangeOfFirstMatchInString:jsonString options:0 range:NSMakeRange(0, jsonString.length)], NSMakeRange(NSNotFound, 0))) {
                     //A string instance is considered valid if the regular expression matches the instance successfully. Recall: regular expressions are not implicitly anchored.
-                    return jsonError(@"string does not match regular expression");
+                    return ValidationError(@"string does not match regular expression");
                 }
             }
         }
@@ -639,19 +626,19 @@ NSError* jsonError(NSString* format,...){
             if ([keyword isEqualToString:@"maxProperties"]) {
                 //An object instance is valid against "maxProperties" if its number of properties is less than, or equal to, the value of this keyword.
                 if ((NSInteger)[jsonDict count] > [schemaItem integerValue]) {
-                    return jsonError(@"object properties count (%d) must be less than, or equal to %@", jsonDict.count, schemaItem); /*invalid JSON dict*/
+                    return ValidationError(@"object properties count (%d) must be less than, or equal to %@", jsonDict.count, schemaItem); /*invalid JSON dict*/
                 }
             } else if ([keyword isEqualToString:@"minProperties"]) {
                 //An object instance is valid against "minProperties" if its number of properties is greater than, or equal to, the value of this keyword.
                 if ((NSInteger)[jsonDict count] < [schemaItem integerValue]) {
-                    return jsonError(@"object properties count (%d) must be greater than, or equal to %@", jsonDict.count, schemaItem); /*invalid JSON dict*/
+                    return ValidationError(@"object properties count (%d) must be greater than, or equal to %@", jsonDict.count, schemaItem); /*invalid JSON dict*/
                 }
             } else if ([keyword isEqualToString:@"required"]) {
                 NSArray * requiredArray = schemaItem;
                 for (NSObject * requiredProp in requiredArray) {
                     NSString * requiredPropStr = (NSString*)requiredProp;
                     if (![jsonDict valueForKey:requiredPropStr]) {
-                        return jsonError(@"required property '%@' is not present", requiredPropStr); //required not present. invalid JSON dict.
+                        return ValidationError(@"required property '%@' is not present", requiredPropStr); //required not present. invalid JSON dict.
                     }
                 }
             } else if (!doneProperties && ([keyword isEqualToString:@"properties"] || [keyword isEqualToString:@"patternProperties"] || [keyword isEqualToString:@"additionalProperties"])) {
@@ -708,7 +695,7 @@ NSError* jsonError(NSString* format,...){
                     //Because we have built a set of schemas/keys up (rather than down), the following test is equivalent to the requirement:
                     //Validation of the instance succeeds if, after these two steps, set "s" is empty.
                     if (testSchemas.count < allKeys.count) {
-                        return jsonError(@"additionalProperties = NO");
+                        return ValidationError(@"additionalProperties = NO");
                     }
                 } else {
                     //find keys from allkeys that are not in testSchemas and add additionalProperties
@@ -759,7 +746,7 @@ NSError* jsonError(NSString* format,...){
                         //For each (name, propertyset) pair of property dependencies, if the instance has a property by this name, then it must also have properties with the same names as propertyset.
                         NSSet * propertySet = [NSSet setWithArray:propertyDependency];
                         if (![propertySet isSubsetOfSet:properties]) {
-                            return jsonError(@"For each (name, propertyset) pair of property dependencies, if the instance has a property by this name, then it must also have properties with the same names as propertyset");
+                            return ValidationError(@"For each (name, propertyset) pair of property dependencies, if the instance has a property by this name, then it must also have properties with the same names as propertyset");
                         }
                     }
                 }
@@ -809,7 +796,7 @@ NSError* jsonError(NSString* format,...){
                         } else {
                             if ([additionalItems isKindOfClass:[NSNumber class]] && [additionalItems boolValue] == NO) {
                                 //if the value of "additionalItems" is boolean value false and the value of "items" is an array, the instance is valid if its size is less than, or equal to, the size of "items".
-                                return jsonError(@"if the value of 'additionalItems' is boolean value false and the value of 'items' is an array, the instance is valid if its size is less than, or equal to, the size of 'items'");
+                                return ValidationError(@"If the value of 'additionalItems' is boolean value false and the value of 'items' is an array, the instance is valid if its size is less than, or equal to, the size of 'items'");
                             } else {
                                 NSError* error = [self _validateJSON:child withSchemaDict:additionalItems];
                                 if (error) {
@@ -821,11 +808,11 @@ NSError* jsonError(NSString* format,...){
                 }
             } else if ([keyword isEqualToString:@"maxItems"]) {
                 if ((NSInteger)[jsonArray count] > [schemaItem integerValue]){
-                    return jsonError(@"An array instance is valid against 'maxItems' if its size is less than, or equal to, the value of this keyword.");
+                    return ValidationError(@"An array instance is valid against 'maxItems' if its size is less than, or equal to, the value of this keyword.");
                 }
             } else if ([keyword isEqualToString:@"minItems"]) {
                 if ((NSInteger)[jsonArray count] < [schemaItem integerValue]) {
-                    return jsonError(@"An array instance is valid against 'minItems' if its size is greater than, or equal to, the value of this keyword.");
+                    return ValidationError(@"An array instance is valid against 'minItems' if its size is greater than, or equal to, the value of this keyword.");
                 }
             } else if ([keyword isEqualToString:@"uniqueItems"]) {
                 if ([schemaItem isKindOfClass:[NSNumber class]] && [schemaItem boolValue] == YES) {
@@ -846,7 +833,7 @@ NSError* jsonError(NSString* format,...){
 
                     if (([uniqueItems count] + fudgeFactor) < [jsonArray count])
                     {
-                        return jsonError(@"all elements must be unique");
+                        return ValidationError(@"all elements must be unique");
                     }
                 }
             }

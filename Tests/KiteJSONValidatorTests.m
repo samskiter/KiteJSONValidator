@@ -56,8 +56,8 @@
                     NSData * data = [NSData dataWithContentsOfFile:fullpath];
                     NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
                     url = [NSURL URLWithString:refPath relativeToURL:url];
-                    BOOL success = [validator addRefSchemaData:data atURL:url];
-                    XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
+                    NSError* addRefError = [validator addRefSchemaData:data atURL:url];
+                    XCTAssertNil(addRefError, @"Unable to add the reference schema at '%@': %@", url, addRefError.localizedDescription);
                 }
                 
                 error = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
