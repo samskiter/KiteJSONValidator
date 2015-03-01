@@ -60,9 +60,9 @@
                     XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
                 }
                 
-                BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
+                error = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
                 BOOL desired = [json[@"valid"] boolValue];
-                if (result != desired) {
+                if ((error?YES:NO) == desired) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
                 }
                 else

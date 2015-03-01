@@ -22,8 +22,9 @@
  @param schemaData The draft4 JSON schema to validate against
  @return Whether the json is validated.
  */
--(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
--(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
+
+-(NSError*)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
+-(NSError*)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
