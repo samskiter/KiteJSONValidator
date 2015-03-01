@@ -331,8 +331,7 @@ NSError* ValidationError(NSString* format, ...){
 
 -(NSError*)validateJSON:(id)json withSchemaDict:(NSDictionary *)schema
 {
-    if (!schema ||
-        ![schema isKindOfClass:[NSDictionary class]]) {
+    if (!schema || ![schema isKindOfClass:[NSDictionary class]]) {
         //NSLog(@"No schema specified, or incorrect data type: %@", schema);
         return ValidationError(@"Schema must be 'Object' type. Not %@", [schema class]);
     }
@@ -791,10 +790,14 @@ NSError* ValidationError(NSString* format, ...){
                 doneItems = YES;
                 id additionalItems = schema[@"additionalItems"];
                 id items = schema[@"items"];
-                if (additionalItems == nil) { additionalItems = [NSDictionary new];}
-                if (items == nil) { items = [NSDictionary new];}
+                if (additionalItems == nil) {
+                    additionalItems = [NSDictionary dictionary];
+                }
+                if (items == nil) {
+                    items = [NSDictionary dictionary];
+                }
                 if ([additionalItems isKindOfClass:[NSNumber class]] && strcmp([additionalItems objCType], @encode(char)) == 0 && [additionalItems boolValue] == YES) {
-                    additionalItems = [NSDictionary new];
+                    additionalItems = [NSDictionary dictionary];
                 }
                 
                 for (NSUInteger index = 0; index < [jsonArray count]; index++) {
@@ -851,7 +854,7 @@ NSError* ValidationError(NSString* format, ...){
 
                     if (([uniqueItems count] + fudgeFactor) < [jsonArray count])
                     {
-                        return ValidationError(@"all elements must be unique");
+                        return ValidationError(@"All elements must be unique");
                     }
                 }
             }
