@@ -72,6 +72,13 @@ NSError* ValidationError(NSString* format, ...){
     return [self addRefSchemaData:schemaData atURL:url validateSchema:YES];
 }
 
+-(NSMutableDictionary *)schemaRefs{
+    if (!_schemaRefs){
+        _schemaRefs = [NSMutableDictionary dictionary];
+    }
+    return _schemaRefs;
+}
+
 -(NSError*)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema
 {
     if (!url) return ValidationError(@"URL must not be empty");
@@ -106,9 +113,6 @@ NSError* ValidationError(NSString* format, ...){
         }
     }
     
-    if (!_schemaRefs) {
-        _schemaRefs = [[NSMutableDictionary alloc] init];
-    }
     self.schemaRefs[url] = schema;
     return nil;
 }
@@ -126,9 +130,7 @@ NSError* ValidationError(NSString* format, ...){
 
         NSData *rootSchemaData = [NSData dataWithContentsOfFile:rootSchemaPath];
         NSError *error = nil;
-        rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData
-                                                     options:kNilOptions
-                                                       error:&error];
+        rootSchema = [NSJSONSerialization JSONObjectWithData:rootSchemaData options:0 error:&error];
         NSAssert(rootSchema != NULL, @"Root schema wasn't found", nil);
         NSAssert([rootSchema isKindOfClass:[NSDictionary class]], @"Root schema wasn't a dictionary", nil);
     });
@@ -136,13 +138,29 @@ NSError* ValidationError(NSString* format, ...){
     return rootSchema;
 }
 
+-(NSMutableArray *)validationStack {
+    if (!_validationStack) {
+        _validationStack = [NSMutableArray array];
+    }
+    return _validationStack;
+}
+
+-(NSMutableArray *)resolutionStack{
+    if (!_resolutionStack) {
+        _resolutionStack = [NSMutableArray array];
+    }
+    return _resolutionStack;
+}
+
+-(NSMutableArray *)schemaStack{
+    if (!_schemaStack) {
+        _schemaStack = [NSMutableArray array];
+    }
+    return _schemaStack;
+}
+
 -(NSError*)pushToStackJSON:(id)json forSchema:(NSDictionary*)schema
 {
-    if (self.validationStack == nil) {
-        self.validationStack = [NSMutableArray new];
-        self.resolutionStack = [NSMutableArray new];
-        self.schemaStack = [NSMutableArray new];
-    }
     KiteValidationPair * pair = [KiteValidationPair pairWithLeft:json right:schema];
     if ([self.validationStack containsObject:pair]) {
         return ValidationError(@"Loops detectsed"); //Detects loops
@@ -323,15 +341,15 @@ NSError* ValidationError(NSString* format, ...){
     //first validate the schema against the root schema then validate against the original
     //first check valid json (use NSJSONSerialization)
 
-    self.validationStack = [NSMutableArray new];
-    self.resolutionStack = [NSMutableArray new];
-    self.schemaStack = [NSMutableArray new];
+    self.validationStack = [NSMutableArray array];
+    self.resolutionStack = [NSMutableArray array];
+    self.schemaStack = [NSMutableArray array];
 
     [self setResolutionString:@"#" forSchema:schema];
     
     NSError* error = [self _validateJSON:schema withSchemaDict:self.rootSchema];
     if (error) {
-        return error; //error: invalid schema
+        return ValidationError(@"Invalid schema: %@", error.localizedDescription);
     }
     
     error = [self _validateJSON:json withSchemaDict:schema];
@@ -906,6 +924,10 @@ NSError* ValidationError(NSString* format, ...){
     } else {
         return NO; //invalid schema - although technically including $schema is only RECOMMENDED
     }
+}
+
+-(NSString *)description{
+    return [NSString stringWithFormat:@"<%@ %p\n%@>", NSStringFromClass(self.class), self, self.schemaRefs];
 }
 
 @end
