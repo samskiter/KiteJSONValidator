@@ -20,11 +20,12 @@
  
  @param jsonData The JSON to be validated
  @param schemaData The draft4 JSON schema to validate against
- @return Whether the json is validated.
+ @return Error if json is invalid. Nil if validated
  */
--(BOOL)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
--(BOOL)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
--(BOOL)validateJSONInstance:(id)json withSchemaData:(NSData*)schemaData;
+
+-(NSError*)validateJSONData:(NSData*)jsonData withSchemaData:(NSData*)schemaData;
+-(NSError*)validateJSONInstance:(id)json withSchema:(NSDictionary*)schema;
+-(NSError*)validateJSONInstance:(id)json withSchemaData:(NSData*)schemaData;
 //TODO:add an interface to add a schema with a key, allowing a schema to only be validated once and then reused
 
 /**
@@ -33,9 +34,9 @@
  @param schemaData The data for the document to be converted to JSON
  @param url        The fragmentless URL for this document
  
- @return Whether the reference schema was successfully added.
+ @return Error if the reference schema is invalid. Nil if was successfully added.
  */
--(BOOL)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url;
+-(NSError*)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url;
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
@@ -44,9 +45,10 @@
  @param url                  The fragmentless URL for this document
  @param shouldValidateSchema Whether the new reference schema should be validated against the "root" schema.
  
- @return Whether the reference schema was successfully added.
+ 
+ @return Error if the reference schema is invalid. Nil if was successfully added.
  */
--(BOOL)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema;
+-(NSError*)addRefSchemaData:(NSData*)schemaData atURL:(NSURL*)url validateSchema:(BOOL)shouldValidateSchema;
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
@@ -54,9 +56,9 @@
  @param schema The dictionary representation of the JSON schema (the JSON was therefore valid).
  @param url    The fragmentless URL for this document
  
- @return Whether the reference schema was successfully added.
+ @return Error if the reference schema is invalid. Nil if was successfully added.
  */
--(BOOL)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url;
+-(NSError*)addRefSchema:(NSDictionary*)schema atURL:(NSURL*)url;
 
 /**
  Used for adding an ENTIRE document to the list of reference schemas - the URL should therefore be fragmentless.
@@ -65,9 +67,9 @@
  @param url                  The fragmentless URL for this document
  @param shouldValidateSchema Whether the new reference schema should be validated against the "root" schema.
  
- @return Whether the reference schema was successfully added.
+ @return Error if the reference schema is invalid. Nil if was successfully added.
  */
--(BOOL)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url validateSchema:(BOOL)shouldValidateSchema;
+-(NSError*)addRefSchema:(NSDictionary *)schema atURL:(NSURL *)url validateSchema:(BOOL)shouldValidateSchema;
 
 @end
 

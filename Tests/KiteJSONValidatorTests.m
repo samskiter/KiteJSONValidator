@@ -15,18 +15,6 @@
 
 @implementation Tests
 
-- (void)setUp
-{
-    [super setUp];
-    // Put setup code here. This method is called before the invocation of each test method in the class.
-}
-
-- (void)tearDown
-{
-    // Put teardown code here. This method is called after the invocation of each test method in the class.
-    [super tearDown];
-}
-
 - (void)testDraft4Suite
 {
     NSBundle * mainBundle = [NSBundle bundleForClass:[self class]];
@@ -56,13 +44,13 @@
                     NSData * data = [NSData dataWithContentsOfFile:fullpath];
                     NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
                     url = [NSURL URLWithString:refPath relativeToURL:url];
-                    BOOL success = [validator addRefSchemaData:data atURL:url];
-                    XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
+                    NSError* addRefError = [validator addRefSchemaData:data atURL:url];
+                    XCTAssertNil(addRefError, @"Unable to add the reference schema at '%@': %@", url, addRefError.localizedDescription);
                 }
                 
-                BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
+                error = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
                 BOOL desired = [json[@"valid"] boolValue];
-                if (result != desired) {
+                if ((error?YES:NO) == desired) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
                 }
                 else
