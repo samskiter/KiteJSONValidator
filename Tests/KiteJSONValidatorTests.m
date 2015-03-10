@@ -50,6 +50,12 @@
                 
                 error = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
                 BOOL desired = [json[@"valid"] boolValue];
+                
+                if (error)
+                {
+                    NSLog(@"error: %@", error.localizedDescription);
+                }
+                
                 if ((error?YES:NO) == desired) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
                 }
