@@ -222,9 +222,11 @@
 
     if ([lastResolution isEqual:refURI]) {
         schema = (NSDictionary*)self.schemaStack.lastObject;
-    } else if (self.schemaRefs != nil && self.schemaRefs[refURI] != nil) {
-        //we changed document
-        schema = self.schemaRefs[refURI];
+    } else if (refURI != nil) {
+        schema = [self resolveSchemaRefURI:refURI withError:error];
+        if (schema == nil) {
+            return NO;
+        }
         [self setResolutionUrl:refURI forSchema:schema];
         newDocument = YES;
     }
@@ -264,6 +266,37 @@
         [self removeResolution];
     }
     return result;
+}
+
+- (NSDictionary *)resolveSchemaRefURI:(NSURL *)refURI withError:(NSError **)error {
+    NSDictionary *schema = self.schemaRefs[refURI];
+    
+    if (schema == nil) {
+        if ([self.delegate respondsToSelector:@selector(schemaValidator:requiresSchemaForRefURL:)]) {
+            schema = [self.delegate schemaValidator:self requiresSchemaForRefURL:refURI];
+        }
+        
+        if (schema == nil && [self.delegate respondsToSelector:@selector(schemaValidator:requiresSchemaDataForRefURL:)]) {
+            NSData *data = [self.delegate schemaValidator:self requiresSchemaDataForRefURL:refURI];
+            NSError *detailedError = nil;
+            schema = [NSJSONSerialization JSONObjectWithData:data options:0 error:&detailedError];
+            if (schema == nil) {
+                if (error) {
+                    *error = [self validationErrorWithDescription:@"Schema data could not be converted to json object" forURL:refURI detailedError:detailedError];
+                }
+                return nil;
+            } else if (![schema isKindOfClass:[NSDictionary class]]) {
+                if (error) {
+                    *error = [self validationErrorWithDescription:@"Schema data does not have a root level dictionary" forURL:refURI detailedError:nil];
+                }
+                return nil;
+            }
+        }
+    }
+    if (schema == nil && error != nil) {
+        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"Schema reference could not be resolved: %@", refURI] forURL:refURI detailedError:nil];
+    }
+    return schema;
 }
 
 -(BOOL)setResolutionString:(NSString *)resolution forSchema:(NSDictionary *)schema
@@ -380,7 +413,7 @@
     }
     if (![self validateJSON:json withSchemaDict:schema error:&detailedError]) {
         if (error) {
-            *error = [self validationErrorWithDescription:@"Supplied schema is not a valid schema" forURL:nil detailedError:detailedError];
+            *error = [self validationErrorWithDescription:@"Supplied json is not valid according to schema" forURL:nil detailedError:detailedError];
         }
         return NO;
     }

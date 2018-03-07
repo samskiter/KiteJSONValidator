@@ -75,6 +75,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol KiteJSONSchemaRefDelegate <NSObject>
 
+@optional
 -(nullable NSData*)schemaValidator:(KiteJSONValidator*)validator requiresSchemaDataForRefURL:(NSURL*)refURL;
 -(nullable NSDictionary*)schemaValidator:(KiteJSONValidator*)validator requiresSchemaForRefURL:(NSURL*)refURL;
 
