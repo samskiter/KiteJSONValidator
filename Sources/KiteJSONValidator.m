@@ -278,6 +278,12 @@
         
         if (schema == nil && [self.delegate respondsToSelector:@selector(schemaValidator:requiresSchemaDataForRefURL:)]) {
             NSData *data = [self.delegate schemaValidator:self requiresSchemaDataForRefURL:refURI];
+            if (data == nil) {
+                if (error) {
+                    *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"Delegate returned no schema data for reference: %@", refURI] forURL:refURI detailedError:nil];
+                }
+                return nil;
+            }
             NSError *detailedError = nil;
             schema = [NSJSONSerialization JSONObjectWithData:data options:0 error:&detailedError];
             if (schema == nil) {
