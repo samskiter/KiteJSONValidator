@@ -56,11 +56,11 @@
                     NSData * data = [NSData dataWithContentsOfFile:fullpath];
                     NSURL * url = [NSURL URLWithString:@"http://localhost:1234/"];
                     url = [NSURL URLWithString:refPath relativeToURL:url];
-                    BOOL success = [validator addRefSchemaData:data atURL:url];
+                    BOOL success = [validator addRefSchemaData:data atURL:url error:nil];
                     XCTAssertTrue(success == YES, @"Unable to add the reference schema at '%@'", url);
                 }
                 
-                BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"]];
+                BOOL result = [validator validateJSONInstance:json[@"data"] withSchema:test[@"schema"] error:nil];
                 BOOL desired = [json[@"valid"] boolValue];
                 if (result != desired) {
                     XCTFail(@"Category: %@ Test: %@ Expected result: %i", test[@"description"], json[@"description"], desired);
