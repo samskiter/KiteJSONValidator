@@ -1,9 +1,6 @@
+osx_image: xcode9.2
 language: objective-c
 before_script:
     - export LANG=en_US.UTF-8
-before_install:
-    - brew update
-    - brew uninstall xctool
-    - brew install xctool
 script:
-    - xctool -project KiteJSONValidator.xcodeproj -scheme KiteJSONValidatorTests -sdk iphonesimulator test ONLY_ACTIVE_ARCH=NO
+    - set -o pipefail && xcodebuild clean test -project KiteJSONValidator.xcodeproj -scheme KiteJSONValidatorTests -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 6,OS=11.2' ONLY_ACTIVE_ARCH=NO | xcpretty
