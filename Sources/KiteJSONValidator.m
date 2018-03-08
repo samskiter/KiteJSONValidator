@@ -567,7 +567,9 @@
             *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object is not one of the valid types according to the JSON schema spec: %@: %@", NSStringFromClass(json), json] forURL:nil detailedError:nil];
         }
         return NO; // the schema is not one of the valid types.
-    }    
+    }
+
+    NSError *detailedError = nil;
     
     //TODO: extract the types first before the check (if there is no type specified, we'll never hit the checking code
     for (NSString * keyword in anyInstanceKeywords) {
@@ -603,9 +605,9 @@
                 }
             } else if ([keyword isEqualToString:@"allOf"]) {
                 for (NSDictionary * subSchema in schemaItem) {
-                    if (![self _validateJSON:json withSchemaDict:subSchema error:error]) {
+                    if (![self _validateJSON:json withSchemaDict:subSchema error:&detailedError]) {
                         if (error) {
-                            *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was not valid to allOf the specified schemas (json, schemaItem): (%@,%@)", json, schemaItem] forURL:nil detailedError:nil];
+                            *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was not valid to allOf the specified schemas (json, schemaItem): (%@,%@)", json, schemaItem] forURL:nil detailedError:detailedError];
                         }
                         return NO;
                     }
@@ -613,38 +615,38 @@
             } else if ([keyword isEqualToString:@"anyOf"]) {
                 BOOL anySuccess = NO;
                 for (NSDictionary * subSchema in schemaItem) {
-                    if ([self _validateJSON:json withSchemaDict:subSchema error:error]) {
+                    if ([self _validateJSON:json withSchemaDict:subSchema error:&detailedError]) {
                         anySuccess = YES;
                         break;
                     }
                 }
                 if (!anySuccess) {
                     if (error) {
-                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was not valid to anyOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:nil];
+                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was not valid to anyOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:detailedError];
                     }
                     return NO;
                 }
             } else if ([keyword isEqualToString:@"oneOf"]) {
                 int passes = 0;
                 for (NSDictionary * subSchema in schemaItem) {
-                    if ([self _validateJSON:json withSchemaDict:subSchema error:error]) { passes++; }
+                    if ([self _validateJSON:json withSchemaDict:subSchema error:&detailedError]) { passes++; }
                     if (passes > 1) {
                         if (error) {
-                            *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to more than exactly oneOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:nil];
+                            *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to more than exactly oneOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:detailedError];
                         }
                         return NO;
                     }
                 }
                 if (passes != 1) {
                     if (error) {
-                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to less than exactly oneOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:nil];
+                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to less than exactly oneOf the specified schemas (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:detailedError];
                     }
                     return NO;
                 }
             } else if ([keyword isEqualToString:@"not"]) {
-                if ([self _validateJSON:json withSchemaDict:schemaItem error:error]) {
+                if ([self _validateJSON:json withSchemaDict:schemaItem error:&detailedError]) {
                     if (error) {
-                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to the specified schema while it should not be as specified by 'not' (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:nil];
+                        *error = [self validationErrorWithDescription:[NSString stringWithFormat:@"JSON object was valid to the specified schema while it should not be as specified by 'not' (json, schemaItem): (%@, %@)", json, schemaItem] forURL:nil detailedError:detailedError];
                     }
                     return NO;
                 }
@@ -656,7 +658,6 @@
     
     if (typeValidator != nil) {
         IMP imp = [self methodForSelector:typeValidator];
-        NSError *detailedError = nil;
         BOOL (*func)(id, SEL, id, id, id*) = (BOOL(*)(id, SEL, id, id, id*))imp;
         if (!func(self, typeValidator, json, schema, &detailedError)) {
             if (error) {
